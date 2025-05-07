@@ -271,7 +271,7 @@ impl Model {
     pub(crate) fn from_enum(item: syn::ItemEnum, attr: TokenStream) -> Self {
         let Ok(bits) = get_num_bits(attr) else {
             abort!(item.span(), "Every enum must be attributed with its serialized size \
-                in bits."; note = "Example: #[wire_format::zigbee_bytes(bits=2)]");
+                in bits."; note = "Example: #[wire_format::abstract_bits(bits=2)]");
         };
         Self::reject_item_generics(&item.generics);
 

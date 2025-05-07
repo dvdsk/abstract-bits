@@ -41,15 +41,15 @@ fn normal_enum(
         }
 
         #[automatically_derived]
-        impl ::wire_format::ZigbeeBytes for #ident {
+        impl ::wire_format::AbstractBits for #ident {
             fn needed_bits(&self) -> usize {
                 #bits
             }
-            fn write_zigbee_bytes(&self, writer: &mut ::wire_format::BitWriter)
+            fn write_abstract_bits(&self, writer: &mut ::wire_format::BitWriter)
             -> Result<(), ::wire_format::ToBytesError> {
                 #write_code
             }
-            fn read_zigbee_bytes(reader: &mut ::wire_format::BitReader)
+            fn read_abstract_bits(reader: &mut ::wire_format::BitReader)
             -> Result<Self, ::wire_format::FromBytesError>
             where
                 Self: Sized
@@ -72,20 +72,20 @@ fn unit_struct(
         #vis struct #ident(#field);
 
         #[automatically_derived]
-        impl ::wire_format::ZigbeeBytes for #ident {
+        impl ::wire_format::AbstractBits for #ident {
             fn needed_bits(&self) -> usize {
                 self.0.needed_bits()
             }
-            fn write_zigbee_bytes(&self, writer: &mut ::wire_format::BitWriter)
+            fn write_abstract_bits(&self, writer: &mut ::wire_format::BitWriter)
             -> Result<(), ::wire_format::ToBytesError> {
-                self.0.write_zigbee_bytes(writer)
+                self.0.write_abstract_bits(writer)
             }
-            fn read_zigbee_bytes(reader: &mut ::wire_format::BitReader)
+            fn read_abstract_bits(reader: &mut ::wire_format::BitReader)
             -> Result<Self, ::wire_format::FromBytesError>
             where
                 Self: Sized
             {
-                Ok(Self(<#field_ty>::read_zigbee_bytes(reader)?))
+                Ok(Self(<#field_ty>::read_abstract_bits(reader)?))
             }
         }
     }
@@ -136,16 +136,16 @@ fn normal_struct(
         }
 
         #[automatically_derived]
-        impl ::wire_format::ZigbeeBytes for #ident {
+        impl ::wire_format::AbstractBits for #ident {
             fn needed_bits(&self) -> usize {
                 todo!()
             }
-            fn write_zigbee_bytes(&self, writer: &mut ::wire_format::BitWriter)
+            fn write_abstract_bits(&self, writer: &mut ::wire_format::BitWriter)
             -> Result<(), ::wire_format::ToBytesError> {
                 #(#write_code)*
                 Ok(())
             }
-            fn read_zigbee_bytes(reader: &mut ::wire_format::BitReader)
+            fn read_abstract_bits(reader: &mut ::wire_format::BitReader)
             -> Result<Self, ::wire_format::FromBytesError>
             where
                 Self: Sized

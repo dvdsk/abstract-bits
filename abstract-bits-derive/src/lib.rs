@@ -15,7 +15,7 @@ mod errors;
 ///
 /// ```
 /// #[derive(Debug, Eq, PartialEq, TryFromPrimitive, Clone, Copy)]
-/// #[zigbee_bytes(bits=2)]
+/// #[abstract_bits(bits=2)]
 /// #[repr(u8)]
 /// pub enum NwkRouteRequestManyToOne {
 ///     NotManyToOne = 0,
@@ -24,7 +24,7 @@ mod errors;
 ///     Reserved = 3,
 /// }
 ///
-/// #[zigbee_bytes]
+/// #[abstract_bits]
 /// #[derive(Debug, Clone, PartialEq)]
 /// pub struct NwkRouteRequestCommand {
 ///     reserved: u3,
@@ -41,7 +41,7 @@ mod errors;
 /// ```
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn zigbee_bytes(
+pub fn abstract_bits(
     attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {

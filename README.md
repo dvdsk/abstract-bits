@@ -100,7 +100,7 @@ enum Type {
 }
 
 let reader = BitReader::from(bytes);
-let mut frame = Frame::read_zigbee_bytes(reader)?;
+let mut frame = Frame::read_abstract_bits(reader)?;
 if frame.type == Type::System {
     for message in &mut frame.data {
         message.is_important = true;

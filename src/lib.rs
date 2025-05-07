@@ -2,7 +2,7 @@ pub use arbitrary_int::{u1, u2, u3, u4, u5, u6, u7};
 pub use bitvec;
 use bitvec::order::Lsb0;
 use bitvec::slice::BitSlice;
-pub use abstract_bits_derive::zigbee_bytes;
+pub use abstract_bits_derive::abstract_bits;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum FromBytesError {
@@ -16,48 +16,48 @@ pub enum ToBytesError {
     ListTooLong { max: usize, got: usize },
 }
 
-pub trait ZigbeeBytes {
+pub trait AbstractBits {
     fn needed_bits(&self) -> usize;
     /// To get the amount written use [`BitWriter::bits_written`] 
     /// or [`BitWriter::bytes_written`]
-    fn write_zigbee_bytes(&self, writer: &mut BitWriter) -> Result<(), ToBytesError>;
+    fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError>;
     /// To get the amount read use [`BitReader::bits_read`] 
     /// or [`BitReader::bytes_read`]
-    fn read_zigbee_bytes(reader: &mut BitReader) -> Result<Self, FromBytesError>
+    fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
     where
         Self: Sized;
 
-    fn to_zigbee_bytes(&self) -> Result<Vec<u8>, ToBytesError> {
+    fn to_abstract_bits(&self) -> Result<Vec<u8>, ToBytesError> {
         let mut buffer = vec![0u8; 100];
         let mut writer = BitWriter::from(buffer.as_mut_slice());
-        self.write_zigbee_bytes(&mut writer)?;
+        self.write_abstract_bits(&mut writer)?;
         let bytes = writer.bytes_written();
         buffer.truncate(bytes);
         Ok(buffer)
     }
 
-    fn from_zigbee_bytes(bytes: &[u8]) -> Result<Self, FromBytesError>
+    fn from_abstract_bits(bytes: &[u8]) -> Result<Self, FromBytesError>
     where
         Self: Sized,
     {
         let mut reader = BitReader::from(bytes);
-        Self::read_zigbee_bytes(&mut reader)
+        Self::read_abstract_bits(&mut reader)
     }
 }
 
 macro_rules! impl_zigbeebytes_for_UInt {
     ($base_type:ty, $write_method:ident, $read_method: ident) => {
-        impl<const N: usize> ZigbeeBytes for arbitrary_int::UInt<$base_type, N> {
+        impl<const N: usize> AbstractBits for arbitrary_int::UInt<$base_type, N> {
             fn needed_bits(&self) -> usize {
                 Self::BITS
             }
 
-            fn write_zigbee_bytes(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
+            fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
                 writer.$write_method(self.needed_bits(), self.value());
                 Ok(())
             }
 
-            fn read_zigbee_bytes(reader: &mut BitReader) -> Result<Self, FromBytesError>
+            fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
             where
                 Self: Sized,
             {
@@ -75,18 +75,18 @@ impl_zigbeebytes_for_UInt! {u64, write_u64, read_u64}
 
 macro_rules! impl_zigbeebytes_for_core_int {
     ($type:ty, $write_method:ident, $read_method:ident, $bits:literal) => {
-        impl ZigbeeBytes for $type {
+        impl AbstractBits for $type {
             fn needed_bits(&self) -> usize {
                 const { assert!(core::mem::size_of::<Self>() * 8 == $bits) }
                 core::mem::size_of::<Self>() * 8
             }
 
-            fn write_zigbee_bytes(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
+            fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
                 writer.$write_method($bits, *self);
                 Ok(())
             }
 
-            fn read_zigbee_bytes(reader: &mut BitReader) -> Result<Self, FromBytesError>
+            fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
             where
                 Self: Sized,
             {
@@ -101,17 +101,17 @@ impl_zigbeebytes_for_core_int! {u16, write_u16, read_u16, 16}
 impl_zigbeebytes_for_core_int! {u32, write_u32, read_u32, 32}
 impl_zigbeebytes_for_core_int! {u64, write_u64, read_u64, 64}
 
-impl ZigbeeBytes for bool {
+impl AbstractBits for bool {
     fn needed_bits(&self) -> usize {
         1
     }
 
-    fn write_zigbee_bytes(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
+    fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
         writer.write_bit(*self);
         Ok(())
     }
 
-    fn read_zigbee_bytes(reader: &mut BitReader) -> Result<Self, FromBytesError>
+    fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
     where
         Self: Sized,
     {
@@ -119,24 +119,24 @@ impl ZigbeeBytes for bool {
     }
 }
 
-impl<const N: usize, T: ZigbeeBytes + Sized> ZigbeeBytes for [T; N] {
+impl<const N: usize, T: AbstractBits + Sized> AbstractBits for [T; N] {
     fn needed_bits(&self) -> usize {
         self.iter().map(|item| item.needed_bits()).sum()
     }
 
-    fn write_zigbee_bytes(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
+    fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
         for element in self.iter() {
-            element.write_zigbee_bytes(writer)?;
+            element.write_abstract_bits(writer)?;
         }
         Ok(())
     }
-    fn read_zigbee_bytes(reader: &mut BitReader) -> Result<Self, FromBytesError>
+    fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
     where
         Self: Sized,
     {
         let mut res = Vec::new();
         for _ in 0..N {
-            res.push(T::read_zigbee_bytes(reader)?);
+            res.push(T::read_abstract_bits(reader)?);
         }
 
         res.try_into()
