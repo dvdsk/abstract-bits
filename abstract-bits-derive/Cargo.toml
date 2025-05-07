@@ -1,0 +1,20 @@
+[package]
+name = "abstract-bits-derive"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.86"
+
+description = "Turn bit & byte sequences into normal structs"
+repository = "https://github.com/dvdsk/abstract-bits"
+
+license = "Apache-2.0 & MIT"
+authors = ["David Kleingeld"]
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1" 
+proc-macro-error2 = "2"
+
+[lib]
+proc-macro = true
