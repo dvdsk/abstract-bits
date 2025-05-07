@@ -27,7 +27,7 @@ pub enum Type {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NormalField {
     pub vis: Visibility,
     pub ident: Ident,
@@ -76,6 +76,11 @@ pub enum Field {
         full_type: NormalField,
         inner_type: NormalField,
     },
+    Array {
+        length: syn::Expr,
+        inner_type: syn::Type,
+        field: syn::Field,
+    },
     ControlList {
         controlled: Ident,
         bits: usize,
@@ -94,11 +99,17 @@ impl Field {
         }
     }
 
-    pub fn needed_in_struct_def(&self) -> Option<&NormalField> {
+    pub fn needed_in_struct_def(&self) -> Option<NormalField> {
         match self {
             Field::Normal(field)
             | Field::Option { full_type: field, .. }
-            | Field::List { full_type: field, .. } => Some(field),
+            | Field::List { full_type: field, .. } => Some(field.clone()),
+            Field::Array { field, .. } => Some(NormalField {
+                vis: field.vis.clone(),
+                ident: field.ident.clone().expect("code is not run for unit structs"),
+                out_ty: field.ty.clone(),
+                bits: None,
+            }),
             _ => None,
         }
     }
@@ -148,6 +159,12 @@ impl Field {
                     Self::List {
                         inner_type: NormalField::from(vec_stripped),
                         full_type: NormalField::from(field),
+                    }
+                } else if let syn::Type::Array(a) = &field.ty {
+                    Self::Array {
+                        inner_type: *a.elem.clone(),
+                        length: a.len.clone(),
+                        field,
                     }
                 } else {
                     Self::Normal(NormalField::from(field))
@@ -212,12 +229,12 @@ fn controls_option(field: &syn::Field) -> Option<Ident> {
     let attr = field
         .attrs
         .iter()
-        .find(|a| a.path().is_ident("wire_format"))?;
+        .find(|a| a.path().is_ident("abstract_bits"))?;
 
     match parse(attr)? {
         Ok(ident) => Some(ident),
-        Err(_) => abort!(attr.span(), "invalid wire_format attribute"; 
-            help = "The syntax is: #[wire_format(controls = <ident>)] with ident \
+        Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
+            help = "The syntax is: #[abstract_bits(controls = <ident>)] with ident \
             a later option type field"),
     }
 }
@@ -245,12 +262,12 @@ fn controls_list(field: &syn::Field) -> Option<Ident> {
     let attr = field
         .attrs
         .iter()
-        .find(|a| a.path().is_ident("wire_format"))?;
+        .find(|a| a.path().is_ident("abstract_bits"))?;
 
     match parse(attr) {
         Ok(ident) => Some(ident),
-        Err(_) => abort!(attr.span(), "invalid wire_format attribute"; 
-            help = "The syntax is: #[wire_format(length_of = <ident>)] with ident \
+        Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
+            help = "The syntax is: #[abstract_bits(length_of = <ident>)] with ident \
             a later option type field"),
     }
 }
@@ -271,7 +288,7 @@ impl Model {
     pub(crate) fn from_enum(item: syn::ItemEnum, attr: TokenStream) -> Self {
         let Ok(bits) = get_num_bits(attr) else {
             abort!(item.span(), "Every enum must be attributed with its serialized size \
-                in bits."; note = "Example: #[wire_format::abstract_bits(bits=2)]");
+                in bits."; note = "Example: #[abstract_bits::abstract_bits(bits=2)]");
         };
         Self::reject_item_generics(&item.generics);
 

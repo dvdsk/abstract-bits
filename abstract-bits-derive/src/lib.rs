@@ -9,7 +9,7 @@ mod errors;
 /// # Warning
 /// - When applied to an enum (which does not contain values) 
 /// that enum must be Copy.
-/// - Any derives should be applied after the this proc macro
+/// - Any derives should be applied after the proc macro
 ///
 /// # Example:
 ///
@@ -29,7 +29,7 @@ mod errors;
 /// pub struct NwkRouteRequestCommand {
 ///     reserved: u3,
 ///     pub many_to_one: NwkRouteRequestManyToOne,
-///     #[wire_format(controls = destination_eui64)]
+///     #[abstract_bits(controls = destination_eui64)]
 ///     reserved: bool,
 ///     reserved: u2,
 ///     pub route_request_identifier: u8,

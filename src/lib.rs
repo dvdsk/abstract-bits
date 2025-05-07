@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub use arbitrary_int::{u1, u2, u3, u4, u5, u6, u7};
 pub use bitvec;
 use bitvec::order::Lsb0;
@@ -45,7 +47,7 @@ pub trait AbstractBits {
     }
 }
 
-macro_rules! impl_zigbeebytes_for_UInt {
+macro_rules! impl_abstract_bits_for_UInt {
     ($base_type:ty, $write_method:ident, $read_method: ident) => {
         impl<const N: usize> AbstractBits for arbitrary_int::UInt<$base_type, N> {
             fn needed_bits(&self) -> usize {
@@ -68,12 +70,12 @@ macro_rules! impl_zigbeebytes_for_UInt {
     };
 }
 
-impl_zigbeebytes_for_UInt! {u8, write_u8, read_u8}
-impl_zigbeebytes_for_UInt! {u16, write_u16, read_u16}
-impl_zigbeebytes_for_UInt! {u32, write_u32, read_u32}
-impl_zigbeebytes_for_UInt! {u64, write_u64, read_u64}
+impl_abstract_bits_for_UInt! {u8, write_u8, read_u8}
+impl_abstract_bits_for_UInt! {u16, write_u16, read_u16}
+impl_abstract_bits_for_UInt! {u32, write_u32, read_u32}
+impl_abstract_bits_for_UInt! {u64, write_u64, read_u64}
 
-macro_rules! impl_zigbeebytes_for_core_int {
+macro_rules! impl_abstract_bits_for_core_int {
     ($type:ty, $write_method:ident, $read_method:ident, $bits:literal) => {
         impl AbstractBits for $type {
             fn needed_bits(&self) -> usize {
@@ -96,10 +98,10 @@ macro_rules! impl_zigbeebytes_for_core_int {
     };
 }
 
-impl_zigbeebytes_for_core_int! {u8, write_u8, read_u8, 8}
-impl_zigbeebytes_for_core_int! {u16, write_u16, read_u16, 16}
-impl_zigbeebytes_for_core_int! {u32, write_u32, read_u32, 32}
-impl_zigbeebytes_for_core_int! {u64, write_u64, read_u64, 64}
+impl_abstract_bits_for_core_int! {u8, write_u8, read_u8, 8}
+impl_abstract_bits_for_core_int! {u16, write_u16, read_u16, 16}
+impl_abstract_bits_for_core_int! {u32, write_u32, read_u32, 32}
+impl_abstract_bits_for_core_int! {u64, write_u64, read_u64, 64}
 
 impl AbstractBits for bool {
     fn needed_bits(&self) -> usize {

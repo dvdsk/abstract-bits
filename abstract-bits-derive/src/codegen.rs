@@ -41,16 +41,16 @@ fn normal_enum(
         }
 
         #[automatically_derived]
-        impl ::wire_format::AbstractBits for #ident {
+        impl ::abstract_bits::AbstractBits for #ident {
             fn needed_bits(&self) -> usize {
                 #bits
             }
-            fn write_abstract_bits(&self, writer: &mut ::wire_format::BitWriter)
-            -> Result<(), ::wire_format::ToBytesError> {
+            fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
+            -> Result<(), ::abstract_bits::ToBytesError> {
                 #write_code
             }
-            fn read_abstract_bits(reader: &mut ::wire_format::BitReader)
-            -> Result<Self, ::wire_format::FromBytesError>
+            fn read_abstract_bits(reader: &mut ::abstract_bits::BitReader)
+            -> Result<Self, ::abstract_bits::FromBytesError>
             where
                 Self: Sized
             {
@@ -72,16 +72,16 @@ fn unit_struct(
         #vis struct #ident(#field);
 
         #[automatically_derived]
-        impl ::wire_format::AbstractBits for #ident {
+        impl ::abstract_bits::AbstractBits for #ident {
             fn needed_bits(&self) -> usize {
                 self.0.needed_bits()
             }
-            fn write_abstract_bits(&self, writer: &mut ::wire_format::BitWriter)
-            -> Result<(), ::wire_format::ToBytesError> {
+            fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
+            -> Result<(), ::abstract_bits::ToBytesError> {
                 self.0.write_abstract_bits(writer)
             }
-            fn read_abstract_bits(reader: &mut ::wire_format::BitReader)
-            -> Result<Self, ::wire_format::FromBytesError>
+            fn read_abstract_bits(reader: &mut ::abstract_bits::BitReader)
+            -> Result<Self, ::abstract_bits::FromBytesError>
             where
                 Self: Sized
             {
@@ -110,6 +110,7 @@ fn normal_struct(
             Field::ControlOption(controlled) => write::control_option_code(controlled),
             Field::Option { inner_type, .. } => write::option_field_code(inner_type),
             Field::List { inner_type, .. } => write::list_field_code(inner_type),
+            Field::Array { field, .. } => write::array_code(field),
         })
         .collect();
     let read_code: Vec<_> = fields
@@ -121,12 +122,17 @@ fn normal_struct(
             Field::ControlOption(ident) => read::control_option_code(ident),
             Field::Option { inner_type, .. } => read::option_field_code(inner_type),
             Field::List { inner_type, .. } => read::list_field_code(inner_type),
+            Field::Array {
+                length,
+                inner_type,
+                field,
+            } => read::array_code(length, inner_type, field),
         })
         .collect();
     let out_struct_idents: Vec<_> = fields
         .iter()
         .filter_map(Field::needed_in_struct_def)
-        .map(|f| &f.ident)
+        .map(|f| f.ident)
         .collect();
 
     quote! {
@@ -136,17 +142,17 @@ fn normal_struct(
         }
 
         #[automatically_derived]
-        impl ::wire_format::AbstractBits for #ident {
+        impl ::abstract_bits::AbstractBits for #ident {
             fn needed_bits(&self) -> usize {
                 todo!()
             }
-            fn write_abstract_bits(&self, writer: &mut ::wire_format::BitWriter)
-            -> Result<(), ::wire_format::ToBytesError> {
+            fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
+            -> Result<(), ::abstract_bits::ToBytesError> {
                 #(#write_code)*
                 Ok(())
             }
-            fn read_abstract_bits(reader: &mut ::wire_format::BitReader)
-            -> Result<Self, ::wire_format::FromBytesError>
+            fn read_abstract_bits(reader: &mut ::abstract_bits::BitReader)
+            -> Result<Self, ::abstract_bits::FromBytesError>
             where
                 Self: Sized
             {

@@ -21,8 +21,8 @@ pub fn normal_field_code(
     }: &NormalField,
 ) -> TokenStream {
     if let Some(bits) = *bits {
-        let utype: syn::Type =
-            syn::parse_str(&format!("::wire_format::u{bits}")).expect("should be valid type path");
+        let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))
+            .expect("should be valid type path");
         quote_spanned! {out_ty.span()=>
             let #ident = #utype::new(self.#ident);
             #ident.write_abstract_bits(writer)?;
@@ -37,8 +37,8 @@ pub fn normal_field_code(
 pub fn option_field_code(field: &NormalField) -> TokenStream {
     let field_ident = &field.ident;
     let write_code = if let Some(bits) = field.bits {
-        let utype: syn::Type =
-            syn::parse_str(&format!("::wire_format::u{bits}")).expect("should be valid type path");
+        let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))
+            .expect("should be valid type path");
         quote_spanned! {field.out_ty.span()=>
             let #field_ident = #utype::new(#field_ident);
             #field_ident.write_abstract_bits(writer)?;
@@ -71,22 +71,22 @@ pub fn control_list_code(controlled: &Ident, bits: usize) -> TokenStream {
     if let Some(ty) = is_primitive(bits) {
         quote_spanned! {controlled.span()=>
             let #len_ident: #ty = self.#controlled.len().try_into()
-                .map_err(|_| ::wire_format::ToBytesError::ListTooLong {
+                .map_err(|_| ::abstract_bits::ToBytesError::ListTooLong {
                     max: #ty::MAX as usize,
                     got: self.#controlled.len(),
             })?;
-            ::wire_format::AbstractBits::write_abstract_bits(&#len_ident, writer)?;
+            ::abstract_bits::AbstractBits::write_abstract_bits(&#len_ident, writer)?;
         }
     } else {
         let utype: syn::Type =
-            syn::parse_str(&format!("::wire_format::u{bits}")).expect("valid type path");
+            syn::parse_str(&format!("::abstract_bits::u{bits}")).expect("valid type path");
         quote_spanned! {controlled.span()=>
             let #len_ident = #utype::new(self.#controlled.len().try_into()
-                .map_err(|_| ::wire_format::ToBytesError::ListTooLong {
+                .map_err(|_| ::abstract_bits::ToBytesError::ListTooLong {
                     max: 2usize.pow(#utype::BITS as u32) - 1,
                     got: self.#controlled.len(),
                 })?);
-            ::wire_format::AbstractBits::write_abstract_bits(&#len_ident, writer)?;
+            ::abstract_bits::AbstractBits::write_abstract_bits(&#len_ident, writer)?;
         }
     }
 }
@@ -94,14 +94,14 @@ pub fn control_list_code(controlled: &Ident, bits: usize) -> TokenStream {
 pub(crate) fn enum_code(repr: Ident, bits: usize) -> TokenStream {
     if is_primitive(bits).is_some() {
         quote_spanned! {repr.span()=>
-            ::wire_format::AbstractBits::write_abstract_bits(&(*self as #repr), writer)
+            ::abstract_bits::AbstractBits::write_abstract_bits(&(*self as #repr), writer)
         }
     } else {
         let utype: syn::Type =
-            syn::parse_str(&format!("::wire_format::u{bits}")).expect("valid type path");
+            syn::parse_str(&format!("::abstract_bits::u{bits}")).expect("valid type path");
         quote_spanned! {repr.span()=>
             let discriminant = #utype::new(*self as #repr);
-            ::wire_format::AbstractBits::write_abstract_bits(&discriminant, writer)
+            ::abstract_bits::AbstractBits::write_abstract_bits(&discriminant, writer)
         }
     }
 }
@@ -110,7 +110,18 @@ pub(crate) fn list_field_code(inner_type: &NormalField) -> TokenStream {
     let field_ident = &inner_type.ident;
     quote_spanned! {field_ident.span()=>
         for element in &self.#field_ident {
-            ::wire_format::AbstractBits::write_abstract_bits(element, writer)?;
+            ::abstract_bits::AbstractBits::write_abstract_bits(element, writer)?;
+        }
+    }
+}
+
+pub(crate) fn array_code(
+    field: &syn::Field,
+) -> TokenStream {
+    let field_ident = &field.ident;
+    quote_spanned! {field_ident.span()=>
+        for element in &self.#field_ident {
+            ::abstract_bits::AbstractBits::write_abstract_bits(element, writer)?;
         }
     }
 }
