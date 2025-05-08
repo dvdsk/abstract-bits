@@ -5,6 +5,7 @@ pub use arbitrary_int::{u1, u2, u3, u4, u5, u6, u7};
 pub use bitvec;
 use bitvec::order::Lsb0;
 use bitvec::slice::BitSlice;
+use core::ops::RangeInclusive;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum FromBytesError {
@@ -35,7 +36,7 @@ pub enum ToBytesError {
 }
 
 pub trait AbstractBits {
-    fn needed_bits(&self) -> usize;
+    fn needed_bits(&self) -> RangeInclusive<usize>;
     /// To get the amount written use [`BitWriter::bits_written`]
     /// or [`BitWriter::bytes_written`]
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError>;
@@ -66,13 +67,13 @@ pub trait AbstractBits {
 macro_rules! impl_abstract_bits_for_UInt {
     ($base_type:ty, $write_method:ident, $read_method: ident) => {
         impl<const N: usize> AbstractBits for arbitrary_int::UInt<$base_type, N> {
-            fn needed_bits(&self) -> usize {
-                Self::BITS
+            fn needed_bits(&self) -> RangeInclusive<usize> {
+                Self::BITS..=Self::BITS
             }
 
             fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
                 writer
-                    .$write_method(self.needed_bits(), self.value())
+                    .$write_method(Self::BITS, self.value())
                     .map_err(|cause| ToBytesError::BufferTooSmall {
                         ty: std::any::type_name::<Self>(),
                         cause,
@@ -103,9 +104,10 @@ impl_abstract_bits_for_UInt! {u64, write_u64, read_u64}
 macro_rules! impl_abstract_bits_for_core_int {
     ($type:ty, $write_method:ident, $read_method:ident, $bits:literal) => {
         impl AbstractBits for $type {
-            fn needed_bits(&self) -> usize {
+            fn needed_bits(&self) -> RangeInclusive<usize> {
                 const { assert!(core::mem::size_of::<Self>() * 8 == $bits) }
-                core::mem::size_of::<Self>() * 8
+                let size = core::mem::size_of::<Self>() * 8;
+                size..=size
             }
 
             fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
@@ -138,8 +140,8 @@ impl_abstract_bits_for_core_int! {u32, write_u32, read_u32, 32}
 impl_abstract_bits_for_core_int! {u64, write_u64, read_u64, 64}
 
 impl AbstractBits for bool {
-    fn needed_bits(&self) -> usize {
-        1
+    fn needed_bits(&self) -> RangeInclusive<usize> {
+        1..=1
     }
 
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
@@ -165,8 +167,9 @@ impl AbstractBits for bool {
 }
 
 impl<const N: usize, T: AbstractBits + Sized> AbstractBits for [T; N] {
-    fn needed_bits(&self) -> usize {
-        self.iter().map(|item| item.needed_bits()).sum()
+    fn needed_bits(&self) -> RangeInclusive<usize> {
+        let size = self.iter().map(|item| *item.needed_bits().end()).sum();
+        size..=size
     }
 
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {

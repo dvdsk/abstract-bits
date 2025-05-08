@@ -77,6 +77,7 @@ pub enum Field {
     List {
         full_type: NormalField,
         inner_type: NormalField,
+        max_len: usize,
     },
     Array {
         length: syn::Expr,
@@ -104,12 +105,19 @@ impl Field {
     pub fn needed_in_struct_def(&self) -> Option<NormalField> {
         match self {
             Field::Normal(field)
-            | Field::Option { full_type: field, .. }
-            | Field::List { full_type: field, .. } => Some(field.clone()),
+            | Field::Option {
+                full_type: field, ..
+            }
+            | Field::List {
+                full_type: field, ..
+            } => Some(field.clone()),
             Field::Array { field, .. } => Some(NormalField {
                 vis: field.vis.clone(),
                 attrs: field.attrs.clone(),
-                ident: field.ident.clone().expect("code is not run for unit structs"),
+                ident: field
+                    .ident
+                    .clone()
+                    .expect("code is not run for unit structs"),
                 out_ty: field.ty.clone(),
                 bits: None,
             }),
@@ -134,7 +142,7 @@ fn padding_from_type(ty: &syn::Type) -> Result<u8, (&'static str, Span)> {
 }
 
 impl Field {
-    fn from(field: syn::Field) -> Self {
+    fn from(field: syn::Field, previous_fields: &[Field]) -> Self {
         match &field.ident {
             Some(ident) if *ident == "reserved" => {
                 if let Some(option_ident) = controls_option(&field) {
@@ -161,6 +169,7 @@ impl Field {
                 } else if let Some(vec_stripped) = strip_vec(field.clone()) {
                     Self::List {
                         inner_type: NormalField::from(vec_stripped),
+                        max_len: max_size_from_control_list(&field.ident, previous_fields),
                         full_type: NormalField::from(field),
                     }
                 } else if let syn::Type::Array(a) = &field.ty {
@@ -175,6 +184,24 @@ impl Field {
             }
             None => unreachable!("unit structs are not tranformed into model::Field"),
         }
+    }
+}
+
+fn max_size_from_control_list(ident: &Option<syn::Ident>, previous_fields: &[Field]) -> usize {
+    let ident = ident.as_ref().expect(
+        "NormalField::from would have already aborted \
+        if ident is None",
+    );
+    if let Some(bits) = previous_fields.iter().find_map(|f| match f {
+        Field::ControlList { controlled, bits } if controlled == ident => Some(bits),
+        _ => None,
+    }) {
+        2usize.pow(*bits as u32)
+    } else {
+        abort!(
+            ident,
+            "List without field controlling its length is not allowed"
+        );
     }
 }
 
@@ -348,7 +375,11 @@ impl Model {
                 .unwrap_or_else(|| abort!(item.span(), "Zero sized struct not supported"));
             Type::UnitStruct(field)
         } else {
-            let fields: Vec<_> = item.fields.into_iter().map(Field::from).collect();
+            let mut fields = Vec::new();
+            for item in item.fields {
+                let field = Field::from(item, &fields);
+                fields.push(field);
+            }
             check_controlled_fields(&fields);
             Type::NormalStruct(fields)
         };

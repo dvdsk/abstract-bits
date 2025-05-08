@@ -1,11 +1,12 @@
 use proc_macro2::{Punct, Spacing, TokenStream};
 use quote::{ToTokens, TokenStreamExt, quote};
+use syn::spanned::Spanned;
 use syn::{Attribute, Ident, Visibility};
 
 use crate::model::{EmptyVariant, Field, Model};
 
-mod read;
-mod write;
+mod enumerate;
+mod fields;
 
 pub fn codegen(model: Model) -> TokenStream {
     match model.ty {
@@ -31,8 +32,8 @@ fn normal_enum(
     repr: Ident,
     bits: usize,
 ) -> TokenStream {
-    let write_code = write::enum_code(repr.clone(), bits);
-    let read_code = read::enum_code(&variants, repr, bits);
+    let write_code = enumerate::write(repr.clone(), bits);
+    let read_code = enumerate::read(&variants, repr, bits);
 
     quote! {
         #(#attrs)*
@@ -42,8 +43,8 @@ fn normal_enum(
 
         #[automatically_derived]
         impl ::abstract_bits::AbstractBits for #ident {
-            fn needed_bits(&self) -> usize {
-                #bits
+            fn needed_bits(&self) -> ::core::ops::RangeInclusive<usize> {
+                #bits..=#bits
             }
             fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
             -> Result<(), ::abstract_bits::ToBytesError> {
@@ -73,7 +74,7 @@ fn unit_struct(
 
         #[automatically_derived]
         impl ::abstract_bits::AbstractBits for #ident {
-            fn needed_bits(&self) -> usize {
+            fn needed_bits(&self) -> ::core::ops::RangeInclusive<usize> {
                 self.0.needed_bits()
             }
             fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
@@ -101,34 +102,9 @@ fn normal_struct(
         .iter()
         .filter_map(Field::needed_in_struct_def)
         .collect();
-    let write_code: Vec<_> = fields
-        .iter()
-        .map(|field| match field {
-            Field::Normal(normal_field) => write::normal_field_code(normal_field),
-            Field::PaddBits(in_type) => write::padding_field_code(*in_type),
-            Field::ControlList { controlled, bits } => write::control_list_code(controlled, *bits),
-            Field::ControlOption(controlled) => write::control_option_code(controlled),
-            Field::Option { inner_type, .. } => write::option_field_code(inner_type),
-            Field::List { inner_type, .. } => write::list_field_code(inner_type),
-            Field::Array { field, .. } => write::array_code(field),
-        })
-        .collect();
-    let read_code: Vec<_> = fields
-        .iter()
-        .map(|field| match field {
-            Field::Normal(normal_field) => read::normal_field_code(normal_field),
-            Field::PaddBits(n_bits) => read::padding_field_code(*n_bits),
-            Field::ControlList { controlled, bits } => read::control_list_code(controlled, *bits),
-            Field::ControlOption(ident) => read::control_option_code(ident),
-            Field::Option { inner_type, .. } => read::option_field_code(inner_type),
-            Field::List { inner_type, .. } => read::list_field_code(inner_type),
-            Field::Array {
-                length,
-                inner_type,
-                field,
-            } => read::array_code(length, inner_type, field),
-        })
-        .collect();
+    let write_code: Vec<_> = fields.iter().map(Field::write_code).collect();
+    let read_code: Vec<_> = fields.iter().map(Field::read_code).collect();
+    let needed_bits_code: Vec<_> = fields.iter().map(Field::needed_bits_code).collect();
     let out_struct_idents: Vec<_> = fields
         .iter()
         .filter_map(Field::needed_in_struct_def)
@@ -143,8 +119,11 @@ fn normal_struct(
 
         #[automatically_derived]
         impl ::abstract_bits::AbstractBits for #ident {
-            fn needed_bits(&self) -> usize {
-                todo!()
+            fn needed_bits(&self) -> ::core::ops::RangeInclusive<usize> {
+                let mut min = 0;
+                let mut max = 0;
+                #(#needed_bits_code)*
+               min..=max
             }
             fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
             -> Result<(), ::abstract_bits::ToBytesError> {
@@ -200,4 +179,21 @@ pub fn is_primitive(bits: usize) -> Option<TokenStream> {
         64 => Some(quote! {u64}),
         _ => None,
     }
+}
+
+/// Turns `Type<T>` into `Type::<T>` which is needed for
+/// `Type::<T>::read_abstract_bits(reader)`
+pub fn generics_to_fully_qualified(mut ty: syn::Type) -> syn::Type {
+    if let syn::Type::Path(typath) = &mut ty {
+        let syn::Path { segments, .. } = &mut typath.path;
+        let first_seg = segments
+            .first_mut()
+            .expect("type path always has at least one segment");
+        let syn::PathArguments::AngleBracketed(args) = &mut first_seg.arguments else {
+            return ty;
+        };
+
+        args.colon2_token = Some(syn::Token![::](args.span()));
+    }
+    ty
 }
