@@ -8,7 +8,7 @@ use crate::model::{EmptyVariant, NormalField};
 
 pub fn padding_field_code(n_bits: u8) -> TokenStream {
     let n_bits = proc_macro2::Literal::usize_suffixed(n_bits as usize);
-    quote! { reader.skip(#n_bits); }
+    quote! { reader.skip(#n_bits).map_err(::abstract_bits::FromBytesError::SkipPadding)?; }
 }
 
 pub fn normal_field_code(

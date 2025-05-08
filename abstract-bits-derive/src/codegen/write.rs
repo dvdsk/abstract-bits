@@ -9,7 +9,7 @@ use super::{is_primitive, list_len_ident};
 
 pub fn padding_field_code(n_bits: u8) -> TokenStream {
     let n_bits = proc_macro2::Literal::usize_suffixed(n_bits as usize);
-    quote! { writer.skip(#n_bits); }
+    quote! { writer.skip(#n_bits).map_err(::abstract_bits::ToBytesError::AddPadding)?; }
 }
 
 pub fn normal_field_code(

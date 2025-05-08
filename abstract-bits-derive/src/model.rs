@@ -30,6 +30,7 @@ pub enum Type {
 #[derive(Debug, Clone)]
 pub struct NormalField {
     pub vis: Visibility,
+    pub attrs: Vec<Attribute>,
     pub ident: Ident,
     pub out_ty: syn::Type,
     pub bits: Option<u8>,
@@ -58,6 +59,7 @@ impl NormalField {
 
         NormalField {
             vis: field.vis,
+            attrs: field.attrs,
             ident: field.ident.expect("unit struct not handled by NormalField"),
             out_ty,
             bits,
@@ -106,6 +108,7 @@ impl Field {
             | Field::List { full_type: field, .. } => Some(field.clone()),
             Field::Array { field, .. } => Some(NormalField {
                 vis: field.vis.clone(),
+                attrs: field.attrs.clone(),
                 ident: field.ident.clone().expect("code is not run for unit structs"),
                 out_ty: field.ty.clone(),
                 bits: None,

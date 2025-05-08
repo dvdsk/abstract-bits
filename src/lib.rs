@@ -1,29 +1,45 @@
 #![doc = include_str!("../README.md")]
 
+pub use abstract_bits_derive::abstract_bits;
 pub use arbitrary_int::{u1, u2, u3, u4, u5, u6, u7};
 pub use bitvec;
 use bitvec::order::Lsb0;
 use bitvec::slice::BitSlice;
-pub use abstract_bits_derive::abstract_bits;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum FromBytesError {
     #[error("Got invalid discriminant {got} while deserializing enum {ty}")]
     InvalidDiscriminant { ty: &'static str, got: usize },
+    #[error("Could not deserialize primitive while deserializing {ty}")]
+    NotEnoughInput {
+        ty: &'static str,
+        #[source]
+        cause: UnexpectedEndOfBits,
+    },
+    #[error("Could not skip over specified bit padding to next field")]
+    SkipPadding(#[source] UnexpectedEndOfBits),
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ToBytesError {
     #[error("List too long to fit. Max length {max}, got: {got}")]
     ListTooLong { max: usize, got: usize },
+    #[error("Buffer is too small to serialize {ty} into")]
+    BufferTooSmall {
+        ty: &'static str,
+        #[source]
+        cause: BufferTooSmall,
+    },
+    #[error("Buffer is too small to add specified bit padding")]
+    AddPadding(#[source] BufferTooSmall),
 }
 
 pub trait AbstractBits {
     fn needed_bits(&self) -> usize;
-    /// To get the amount written use [`BitWriter::bits_written`] 
+    /// To get the amount written use [`BitWriter::bits_written`]
     /// or [`BitWriter::bytes_written`]
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError>;
-    /// To get the amount read use [`BitReader::bits_read`] 
+    /// To get the amount read use [`BitReader::bits_read`]
     /// or [`BitReader::bytes_read`]
     fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
     where
@@ -55,15 +71,24 @@ macro_rules! impl_abstract_bits_for_UInt {
             }
 
             fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
-                writer.$write_method(self.needed_bits(), self.value());
-                Ok(())
+                writer
+                    .$write_method(self.needed_bits(), self.value())
+                    .map_err(|cause| ToBytesError::BufferTooSmall {
+                        ty: std::any::type_name::<Self>(),
+                        cause,
+                    })
             }
 
             fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
             where
                 Self: Sized,
             {
-                let value = reader.$read_method(Self::BITS);
+                let value = reader.$read_method(Self::BITS).map_err(|cause| {
+                    FromBytesError::NotEnoughInput {
+                        ty: std::any::type_name::<Self>(),
+                        cause,
+                    }
+                })?;
                 Ok(Self::new(value))
             }
         }
@@ -84,15 +109,24 @@ macro_rules! impl_abstract_bits_for_core_int {
             }
 
             fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
-                writer.$write_method($bits, *self);
-                Ok(())
+                writer
+                    .$write_method($bits, *self)
+                    .map_err(|cause| ToBytesError::BufferTooSmall {
+                        ty: std::any::type_name::<Self>(),
+                        cause,
+                    })
             }
 
             fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
             where
                 Self: Sized,
             {
-                Ok(reader.$read_method($bits))
+                reader
+                    .$read_method($bits)
+                    .map_err(|cause| FromBytesError::NotEnoughInput {
+                        ty: std::any::type_name::<Self>(),
+                        cause,
+                    })
             }
         }
     };
@@ -109,15 +143,24 @@ impl AbstractBits for bool {
     }
 
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
-        writer.write_bit(*self);
-        Ok(())
+        writer
+            .write_bit(*self)
+            .map_err(|cause| ToBytesError::BufferTooSmall {
+                ty: core::any::type_name::<Self>(),
+                cause,
+            })
     }
 
     fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
     where
         Self: Sized,
     {
-        Ok(reader.read_bit())
+        reader
+            .read_bit()
+            .map_err(|cause| FromBytesError::NotEnoughInput {
+                ty: core::any::type_name::<Self>(),
+                cause,
+            })
     }
 }
 
@@ -146,64 +189,74 @@ impl<const N: usize, T: AbstractBits + Sized> AbstractBits for [T; N] {
     }
 }
 
-// For now these use owned fixed size arrays. In the future we might want to
-// borrow those, that could help minimize stack usage on embedded.
-pub struct BitWriter<'a> {
-    pos: usize,
-    buf: &'a mut BitSlice<u8, Lsb0>,
-}
 pub struct BitReader<'a> {
     pos: usize,
     buf: &'a BitSlice<u8, Lsb0>,
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error(
+    "Need to read beyond end of provided buffer to read {n_bits}. \
+    Buffer is missing {bits_needed} bits"
+)]
+pub struct UnexpectedEndOfBits {
+    n_bits: usize,
+    bits_needed: usize,
+}
+
+macro_rules! read_primitive {
+    ($name:ident, $ty:ty) => {
+        fn $name(&mut self, n_bits: usize) -> Result<$ty, UnexpectedEndOfBits> {
+            let mut res = <$ty>::default().to_le_bytes();
+            let res_bits = BitSlice::<_, Lsb0>::from_slice_mut(&mut res);
+            if self.buf.len() <= self.pos + n_bits {
+                Err(UnexpectedEndOfBits {
+                    n_bits,
+                    bits_needed: self.pos + n_bits - self.buf.len(),
+                })
+            } else {
+                res_bits[0..n_bits].copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
+                self.pos += n_bits;
+                Ok(<$ty>::from_le_bytes(res))
+            }
+        }
+    };
 }
 
 impl BitReader<'_> {
     pub fn bits_read(&self) -> usize {
         self.pos
     }
-    /// 12 bits read corrosponds to 2 bytes read
+    /// 12 bits read corresponds to 2 bytes read
     pub fn bytes_read(&self) -> usize {
         self.pos.div_ceil(8)
     }
-    pub fn skip(&mut self, n_bits: usize) {
-        self.pos += n_bits;
+    pub fn skip(&mut self, n_bits: usize) -> Result<(), UnexpectedEndOfBits> {
+        if self.pos + n_bits <= self.buf.len() {
+            Err(UnexpectedEndOfBits {
+                n_bits,
+                bits_needed: self.pos + n_bits - self.buf.len(),
+            })
+        } else {
+            self.pos += n_bits;
+            Ok(())
+        }
     }
-    fn read_bit(&mut self) -> bool {
-        let res = self
-            .buf
-            .get(self.pos)
-            .expect("should not call read after reader is at end of buffer");
+    fn read_bit(&mut self) -> Result<bool, UnexpectedEndOfBits> {
+        let Some(res) = self.buf.get(self.pos) else {
+            return Err(UnexpectedEndOfBits {
+                n_bits: 1,
+                bits_needed: 1,
+            });
+        };
         self.pos += 1;
-        *res
+        Ok(*res)
     }
-    fn read_u8(&mut self, n_bits: usize) -> u8 {
-        let mut res = 0u8;
-        let res_bits = BitSlice::<_, Lsb0>::from_element_mut(&mut res);
-        res_bits[0..n_bits].copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
-        self.pos += n_bits;
-        res
-    }
-    fn read_u16(&mut self, n_bits: usize) -> u16 {
-        let mut res = [0u8; 2];
-        let res_bits = BitSlice::<_, Lsb0>::from_slice_mut(&mut res);
-        res_bits[0..n_bits].copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
-        self.pos += n_bits;
-        u16::from_le_bytes(res)
-    }
-    fn read_u32(&mut self, n_bits: usize) -> u32 {
-        let mut res = [0u8; 4];
-        let res_bits = BitSlice::<_, Lsb0>::from_slice_mut(&mut res);
-        res_bits[0..n_bits].copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
-        self.pos += n_bits;
-        u32::from_le_bytes(res)
-    }
-    fn read_u64(&mut self, n_bits: usize) -> u64 {
-        let mut res = [0u8; 8];
-        let res_bits = BitSlice::<_, Lsb0>::from_slice_mut(&mut res);
-        res_bits[0..n_bits].copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
-        self.pos += n_bits;
-        u64::from_le_bytes(res)
-    }
+
+    read_primitive! {read_u8, u8}
+    read_primitive! {read_u16, u16}
+    read_primitive! {read_u32, u32}
+    read_primitive! {read_u64, u64}
 }
 
 impl<'a> From<&'a [u8]> for BitReader<'a> {
@@ -215,44 +268,76 @@ impl<'a> From<&'a [u8]> for BitReader<'a> {
     }
 }
 
+pub struct BitWriter<'a> {
+    pos: usize,
+    buf: &'a mut BitSlice<u8, Lsb0>,
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error(
+    "Buffer is too small to serialize `{n_bits}` into. \
+    Buffer needs to be at least {bits_needed} bits extra"
+)]
+pub struct BufferTooSmall {
+    n_bits: usize,
+    bits_needed: usize,
+}
+
+macro_rules! write_primitive {
+    ($name:ident, $ty:ty) => {
+        fn $name(&mut self, n_bits: usize, val: $ty) -> Result<(), BufferTooSmall> {
+            let val = val.to_le_bytes();
+            let val = BitSlice::<_, Lsb0>::from_slice(&val);
+            if self.buf.len() <= self.pos + n_bits {
+                Err(BufferTooSmall {
+                    n_bits,
+                    bits_needed: self.buf.len() - (self.pos + n_bits),
+                })
+            } else {
+                self.buf[self.pos..self.pos + n_bits].copy_from_bitslice(&val[..n_bits]);
+                self.pos += n_bits;
+                Ok(())
+            }
+        }
+    };
+}
+
 impl BitWriter<'_> {
     pub fn bits_written(&self) -> usize {
         self.pos
     }
-    /// 12 bits read corrosponds to 2 bytes read
+    /// 12 bits read corresponds to 2 bytes read
     pub fn bytes_written(&self) -> usize {
         self.pos.div_ceil(8)
     }
-    pub fn skip(&mut self, n_bits: usize) {
-        self.pos += n_bits;
+    pub fn skip(&mut self, n_bits: usize) -> Result<(), BufferTooSmall> {
+        if self.pos + n_bits <= self.buf.len() {
+            Err(BufferTooSmall {
+                n_bits,
+                bits_needed: self.pos + n_bits - self.buf.len(),
+            })
+        } else {
+            self.pos += n_bits;
+            Ok(())
+        }
     }
-    fn write_bit(&mut self, bit: bool) {
-        self.buf.set(self.pos, bit);
-        self.pos += 1;
+    fn write_bit(&mut self, bit: bool) -> Result<(), BufferTooSmall> {
+        if self.pos + 1 <= self.buf.len() {
+            Err(BufferTooSmall {
+                n_bits: 1,
+                bits_needed: 1,
+            })
+        } else {
+            self.buf.set(self.pos, bit);
+            self.pos += 1;
+            Ok(())
+        }
     }
-    fn write_u8(&mut self, n_bits: usize, val: u8) {
-        let val = BitSlice::<_, Lsb0>::from_element(&val);
-        self.buf[self.pos..self.pos + n_bits].copy_from_bitslice(&val[..n_bits]);
-        self.pos += n_bits;
-    }
-    fn write_u16(&mut self, n_bits: usize, val: u16) {
-        let val = val.to_le_bytes();
-        let val = BitSlice::<_, Lsb0>::from_slice(&val);
-        self.buf[self.pos..self.pos + n_bits].copy_from_bitslice(&val[..n_bits]);
-        self.pos += n_bits;
-    }
-    fn write_u32(&mut self, n_bits: usize, val: u32) {
-        let val = val.to_le_bytes();
-        let val = BitSlice::<_, Lsb0>::from_slice(&val);
-        self.buf[self.pos..self.pos + n_bits].copy_from_bitslice(&val[..n_bits]);
-        self.pos += n_bits;
-    }
-    fn write_u64(&mut self, n_bits: usize, val: u64) {
-        let val = val.to_le_bytes();
-        let val = BitSlice::<_, Lsb0>::from_slice(&val);
-        self.buf[self.pos..self.pos + n_bits].copy_from_bitslice(&val[..n_bits]);
-        self.pos += n_bits;
-    }
+
+    write_primitive!(write_u8, u8);
+    write_primitive!(write_u16, u16);
+    write_primitive!(write_u32, u32);
+    write_primitive!(write_u64, u64);
 }
 
 impl<'a> From<&'a mut [u8]> for BitWriter<'a> {

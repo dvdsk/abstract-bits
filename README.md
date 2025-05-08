@@ -47,7 +47,7 @@ print!("number of links: {}", link_status_cmd.link_statuses.len());
 
 # Usage
 ## With a struct
-- Add `#[abstract-bits]` above your struct.
+- Add `#[abstract-bits]` above your struct and any *derives*.
 - Use `u<n>` (`n` a natural number larger than zero) for numeric fields. In the
   transformed struct these will transform to the smallest rust primitives that
   can represent them. For example an `u7` will become an `u8`.
@@ -60,7 +60,8 @@ print!("number of links: {}", link_status_cmd.link_statuses.len());
 
 ## With an enum
 - Add `#[abstract-bits(bits = <N>)]` above your enum. Replace `N` with the
-  number of bits the enum should occupy when serialized.
+  number of bits the enum should occupy when serialized. Make sure any *derives*
+  follow after.
 - Explicitly assign every variant a value.
 - Add a `#[repr(<Type>]` attribute, for example `#[repr(u8)]`.
 
@@ -70,6 +71,7 @@ print!("number of links: {}", link_status_cmd.link_statuses.len());
 // - 4+1+5+2+2|0+n*18, with n in range 0..u5::MAX 
 // so this is at most 14 + 31*18  = 572 bits long
 #[abstract_bits]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] // note: derives follow after
 struct Frame {
     header: u4,
     #[abstract_bits(controls = source)]
@@ -94,6 +96,7 @@ struct Message {
 #[abstract_bits(bits = 2)]
 #[repr(u8)]
 enum Type {
+    #[default]
     System = 0,
     Personal = 1,
     Group = 2,
@@ -101,7 +104,7 @@ enum Type {
 
 let reader = BitReader::from(bytes);
 let mut frame = Frame::read_abstract_bits(reader)?;
-if frame.type == Type::System {
+if frame.type == Type::default() {
     for message in &mut frame.data {
         message.is_important = true;
     }

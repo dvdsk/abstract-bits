@@ -167,6 +167,9 @@ fn normal_struct(
 
 impl ToTokens for super::model::NormalField {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
         self.vis.to_tokens(tokens);
 
         self.ident.to_tokens(tokens);
