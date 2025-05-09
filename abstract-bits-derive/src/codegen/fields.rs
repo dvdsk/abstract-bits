@@ -10,10 +10,10 @@ mod option;
 mod padding;
 
 impl Field {
-    pub fn read_code(&self) -> TokenStream {
+    pub fn read_code(&self, struct_name: &syn::Ident) -> TokenStream {
         match self {
             Field::Normal(normal_field) => normal::read(normal_field),
-            Field::PaddBits(n_bits) => padding::read(*n_bits),
+            Field::PaddBits(n_bits) => padding::read(*n_bits, struct_name),
             Field::ControlList { controlled, bits } => control_list::read(controlled, *bits),
             Field::ControlOption(ident) => control_option::read(ident),
             Field::Option { inner_type, .. } => option::read(inner_type),
@@ -26,10 +26,10 @@ impl Field {
         }
     }
 
-    pub fn write_code(&self) -> TokenStream {
+    pub fn write_code(&self, struct_name: &syn::Ident) -> TokenStream {
         match self {
             Field::Normal(normal_field) => normal::write(normal_field),
-            Field::PaddBits(n_bits) => padding::write(*n_bits),
+            Field::PaddBits(n_bits) => padding::write(*n_bits, struct_name),
             Field::ControlList { controlled, bits } => control_list::write(controlled, *bits),
             Field::ControlOption(controlled) => control_option::write(controlled),
             Field::Option { inner_type, .. } => option::write(inner_type),

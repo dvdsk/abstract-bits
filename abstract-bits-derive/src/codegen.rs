@@ -102,8 +102,8 @@ fn normal_struct(
         .iter()
         .filter_map(Field::needed_in_struct_def)
         .collect();
-    let write_code: Vec<_> = fields.iter().map(Field::write_code).collect();
-    let read_code: Vec<_> = fields.iter().map(Field::read_code).collect();
+    let write_code: Vec<_> = fields.iter().map(|f| f.write_code(&ident)).collect();
+    let read_code: Vec<_> = fields.iter().map(|f| f.read_code(&ident)).collect();
     let min_bits_code: Vec<_> = fields.iter().map(Field::min_bits_code).collect();
     let max_bits_code: Vec<_> = fields.iter().map(Field::max_bits_code).collect();
     let out_struct_idents: Vec<_> = fields
@@ -166,6 +166,9 @@ impl ToTokens for super::model::NormalField {
 
 impl ToTokens for super::model::EmptyVariant {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
         self.ident.to_tokens(tokens);
         tokens.append(Punct::new('=', Spacing::Joint));
 

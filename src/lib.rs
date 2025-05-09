@@ -16,8 +16,12 @@ pub enum FromBytesError {
         #[source]
         cause: UnexpectedEndOfBits,
     },
-    #[error("Could not skip over specified bit padding to next field")]
-    SkipPadding(#[source] UnexpectedEndOfBits),
+    #[error("Could not skip over specified bit padding in {in_struct} while serializing")]
+    SkipPadding {
+        in_struct: &'static str,
+        #[source]
+        cause: UnexpectedEndOfBits,
+    },
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -30,8 +34,12 @@ pub enum ToBytesError {
         #[source]
         cause: BufferTooSmall,
     },
-    #[error("Buffer is too small to add specified bit padding")]
-    AddPadding(#[source] BufferTooSmall),
+    #[error("Buffer is too small to add bit padding specified in {in_struct}")]
+    AddPadding {
+        in_struct: &'static str,
+        #[source]
+        cause: BufferTooSmall,
+    },
 }
 
 pub trait AbstractBits {
@@ -229,10 +237,10 @@ impl BitReader<'_> {
         self.pos.div_ceil(8)
     }
     pub fn skip(&mut self, n_bits: usize) -> Result<(), UnexpectedEndOfBits> {
-        if self.pos + n_bits >= self.buf.len() {
+        if self.pos + n_bits > self.buf.len() {
             Err(UnexpectedEndOfBits {
                 n_bits,
-                bits_needed: self.pos + n_bits - self.buf.len(),
+                bits_needed: (self.pos + n_bits + 1) - self.buf.len(),
             })
         } else {
             self.pos += n_bits;
@@ -316,10 +324,10 @@ impl BitWriter<'_> {
         self.pos.div_ceil(8)
     }
     pub fn skip(&mut self, n_bits: usize) -> Result<(), BufferTooSmall> {
-        if self.pos + n_bits >= self.buf.len() {
+        if self.pos + n_bits > self.buf.len() {
             Err(BufferTooSmall {
                 n_bits,
-                bits_needed: (self.pos + n_bits) - self.buf.len(),
+                bits_needed: (self.pos + n_bits + 1) - self.buf.len(),
             })
         } else {
             self.pos += n_bits;

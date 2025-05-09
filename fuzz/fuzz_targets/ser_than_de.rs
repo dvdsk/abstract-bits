@@ -36,7 +36,7 @@ struct Message {
 }
 
 #[abstract_bits(bits = 2)]
-#[derive(Debug, Clone, Copy, Arbitrary, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, Arbitrary, PartialEq, Eq)]
 #[repr(u8)]
 enum Type {
     #[default]

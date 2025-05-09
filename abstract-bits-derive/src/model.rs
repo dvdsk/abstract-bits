@@ -12,6 +12,7 @@ pub struct Model {
 }
 
 pub struct EmptyVariant {
+    pub attrs: Vec<Attribute>,
     pub ident: Ident,
     pub discriminant: usize,
 }
@@ -328,6 +329,7 @@ impl Model {
             .clone()
             .into_iter()
             .map(|v| EmptyVariant {
+                attrs: v.attrs,
                 ident: v.ident,
                 discriminant: require_usize(
                     v.discriminant

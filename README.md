@@ -22,6 +22,8 @@ Its especially tricky that an earlier *bitfield* is determining the list length.
 
 Which is why we now have `abstract-bits`!
 ```rust
+use abstract_bits::{abstract_bits, AbstractBits};
+
 #[abstract_bits]
 struct LinkStatusCommand {
     #[abstract_bits(length_of = link_statuses)]
@@ -41,8 +43,16 @@ struct LinkStatus {
     reserved: u1,
 }
 
-let link_status_cmd = LinkStatusCommand::from_bytes(bytes)?;
-print!("number of links: {}", link_status_cmd.link_statuses.len());
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = LinkStatusCommand {
+        is_first_frame: false,
+        is_last_frame: true,
+        link_statuses: Vec::new(),
+    }.to_abstract_bits()?;
+    let link_status_cmd = LinkStatusCommand::from_abstract_bits(&bytes)?;
+    print!("number of links: {}", link_status_cmd.link_statuses.len());
+    Ok(())
+}
 ```
 
 # Usage
@@ -67,33 +77,36 @@ print!("number of links: {}", link_status_cmd.link_statuses.len());
 
 # Complex example
 ```rust
+use abstract_bits::{abstract_bits, AbstractBits, BitReader};
+
 // The size of this is: 
 // - 4+1+5+2+2|0+n*18, with n in range 0..u5::MAX 
 // so this is at most 14 + 31*18  = 572 bits long
 #[abstract_bits]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] // note: derives follow after
+#[derive(Debug, PartialEq, Eq)] // note: derives follow after
 struct Frame {
     header: u4,
     #[abstract_bits(controls = source)]
     reserved: bool,
     #[abstract_bits(length_of = data)]
     reserved: u5,
-    type: Type,
+    frame_type: Type,
     source: Option<u16>,
     data: Vec<Message>,
 }
 
 /// This is: 4+3+1+10 = 18 bits long
 #[abstract_bits]
+#[derive(Debug, PartialEq, Eq)]
 struct Message {
     header: u4,
     reserved: u3,
     is_important: bool,
-    bits: [bool; 10]
+    bits: [bool; 4]
 }
 
-#[derive(Copy, PartialEq, Eq)]
 #[abstract_bits(bits = 2)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 enum Type {
     #[default]
@@ -102,14 +115,27 @@ enum Type {
     Group = 2,
 }
 
-let reader = BitReader::from(bytes);
-let mut frame = Frame::read_abstract_bits(reader)?;
-if frame.type == Type::default() {
-    for message in &mut frame.data {
-        message.is_important = true;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = Frame {
+        header: 12,
+        frame_type: Type::default(),
+        source: Some(4243),
+        data: vec![Message {
+            header: 9,
+            is_important: false,
+            bits: [true, false, true, true]
+        }],
+    }.to_abstract_bits()?;
+    let mut reader = BitReader::from(bytes.as_slice());
+    let mut frame = Frame::read_abstract_bits(&mut reader)?;
+    if frame.frame_type == Type::default() {
+        for message in &mut frame.data {
+            message.is_important = true;
+        }
     }
+    let bytes = frame.to_abstract_bits();
+    Ok(())
 }
-let bytes = frame.to_bytes();
 ```
 
 # Planned features
