@@ -1,0 +1,22 @@
+[package]
+name = "abstract-bits-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.abstract-bits]
+path = ".."
+
+[[bin]]
+name = "ser_than_de"
+path = "fuzz_targets/ser_than_de.rs"
+test = false
+doc = false
+bench = false
