@@ -11,10 +11,16 @@ pub fn write(n_bits: u8) -> TokenStream {
     quote! { writer.skip(#n_bits).map_err(::abstract_bits::ToBytesError::AddPadding)?; }
 }
 
-pub(crate) fn needed_bits(n_bits: u8) -> TokenStream {
+pub(crate) fn min_bits(n_bits: u8) -> TokenStream {
     let n_bits = proc_macro2::Literal::usize_unsuffixed(n_bits as usize);
     quote! {
-        min += #n_bits;
-        max += #n_bits;
+        #n_bits
+    }
+}
+
+pub(crate) fn max_bits(n_bits: u8) -> TokenStream {
+    let n_bits = proc_macro2::Literal::usize_unsuffixed(n_bits as usize);
+    quote! {
+        #n_bits
     }
 }

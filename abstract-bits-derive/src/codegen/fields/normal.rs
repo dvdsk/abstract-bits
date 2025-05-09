@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote_spanned;
+use quote::{ToTokens, quote_spanned};
 use syn::spanned::Spanned;
 
 use crate::codegen::generics_to_fully_qualified;
@@ -50,11 +50,24 @@ pub fn write(
     }
 }
 
-pub(crate) fn needed_bits(normal_field: &crate::model::NormalField) -> TokenStream {
+pub(crate) fn min_bits(normal_field: &crate::model::NormalField) -> TokenStream {
     let ty = &normal_field.out_ty;
-    quote_spanned! {normal_field.ident.span()=>
-        let range = #ty::needed_bits();
-        min += range.start();
-        max += range.end();
+    if let Some(n) = normal_field.bits {
+        proc_macro2::Literal::usize_unsuffixed(n as usize).to_token_stream()
+    } else {
+        quote_spanned! {normal_field.ident.span()=>
+            #ty::MIN_BITS
+        }
+    }
+}
+
+pub(crate) fn max_bits(normal_field: &crate::model::NormalField) -> TokenStream {
+    let ty = &normal_field.out_ty;
+    if let Some(n) = normal_field.bits {
+        proc_macro2::Literal::usize_unsuffixed(n as usize).to_token_stream()
+    } else {
+        quote_spanned! {normal_field.ident.span()=>
+                #ty::MAX_BITS
+        }
     }
 }

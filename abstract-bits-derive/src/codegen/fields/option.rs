@@ -45,11 +45,16 @@ pub fn write(field: &NormalField) -> TokenStream {
     )
 }
 
-pub(crate) fn needed_bits(inner_type: &NormalField) -> TokenStream {
+pub(crate) fn min_bits(inner_type: &NormalField) -> TokenStream {
     let ty = &inner_type.out_ty;
     quote_spanned! {inner_type.ident.span()=>
-        let range = #ty::needed_bits();
-        min += range.start();
-        max += range.end();
+        #ty::MIN_BITS
+    }
+}
+
+pub(crate) fn max_bits(inner_type: &NormalField) -> TokenStream {
+    let ty = &inner_type.out_ty;
+    quote_spanned! {inner_type.ident.span()=>
+        #ty::MAX_BITS
     }
 }

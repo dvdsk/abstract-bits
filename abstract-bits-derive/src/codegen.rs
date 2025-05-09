@@ -43,9 +43,9 @@ fn normal_enum(
 
         #[automatically_derived]
         impl ::abstract_bits::AbstractBits for #ident {
-            fn needed_bits(&self) -> ::core::ops::RangeInclusive<usize> {
-                #bits..=#bits
-            }
+            const MAX_BITS: usize = #bits;
+            const MIN_BITS: usize = #bits;
+
             fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
             -> Result<(), ::abstract_bits::ToBytesError> {
                 #write_code
@@ -74,9 +74,9 @@ fn unit_struct(
 
         #[automatically_derived]
         impl ::abstract_bits::AbstractBits for #ident {
-            fn needed_bits(&self) -> ::core::ops::RangeInclusive<usize> {
-                self.0.needed_bits()
-            }
+            const MAX_BITS: usize = <#field_ty as abstract_bits::AbstractBits>::MAX_BITS;
+            const MIN_BITS: usize = <#field_ty as abstract_bits::AbstractBits>::MIN_BITS;
+
             fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
             -> Result<(), ::abstract_bits::ToBytesError> {
                 self.0.write_abstract_bits(writer)
@@ -104,7 +104,8 @@ fn normal_struct(
         .collect();
     let write_code: Vec<_> = fields.iter().map(Field::write_code).collect();
     let read_code: Vec<_> = fields.iter().map(Field::read_code).collect();
-    let needed_bits_code: Vec<_> = fields.iter().map(Field::needed_bits_code).collect();
+    let min_bits_code: Vec<_> = fields.iter().map(Field::min_bits_code).collect();
+    let max_bits_code: Vec<_> = fields.iter().map(Field::max_bits_code).collect();
     let out_struct_idents: Vec<_> = fields
         .iter()
         .filter_map(Field::needed_in_struct_def)
@@ -119,12 +120,17 @@ fn normal_struct(
 
         #[automatically_derived]
         impl ::abstract_bits::AbstractBits for #ident {
-            fn needed_bits(&self) -> ::core::ops::RangeInclusive<usize> {
+            const MIN_BITS: usize = const {
                 let mut min = 0;
+                #(min += #min_bits_code;)*
+                min
+            };
+            const MAX_BITS: usize = const {
                 let mut max = 0;
-                #(#needed_bits_code)*
-               min..=max
-            }
+                #(max += #max_bits_code;)*
+                max
+            };
+
             fn write_abstract_bits(&self, writer: &mut ::abstract_bits::BitWriter)
             -> Result<(), ::abstract_bits::ToBytesError> {
                 #(#write_code)*

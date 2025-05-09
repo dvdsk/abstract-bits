@@ -35,20 +35,31 @@ pub fn write(controlled: &Ident, bits: usize) -> TokenStream {
         let utype: syn::Type =
             syn::parse_str(&format!("::abstract_bits::u{bits}")).expect("valid type path");
         quote_spanned! {controlled.span()=>
-            let #len_ident = #utype::new(self.#controlled.len().try_into()
+            let #len_ident = self.#controlled.len().try_into()
                 .map_err(|_| ::abstract_bits::ToBytesError::ListTooLong {
                     max: 2usize.pow(#utype::BITS as u32) - 1,
                     got: self.#controlled.len(),
-                })?);
+                })?;
+            let #len_ident = #utype::try_new(#len_ident)
+                .map_err(|_| ::abstract_bits::ToBytesError::ListTooLong {
+                    max: 2usize.pow(#utype::BITS as u32) - 1,
+                    got: self.#controlled.len(),
+                })?;
             ::abstract_bits::AbstractBits::write_abstract_bits(&#len_ident, writer)?;
         }
     }
 }
 
-pub(crate) fn needed_bits(n_bits: usize) -> TokenStream {
+pub(crate) fn min_bits(n_bits: usize) -> TokenStream {
     let n_bits = proc_macro2::Literal::usize_unsuffixed(n_bits);
     quote! {
-        min += #n_bits;
-        max += #n_bits;
+        #n_bits
+    }
+}
+
+pub(crate) fn max_bits(n_bits: usize) -> TokenStream {
+    let n_bits = proc_macro2::Literal::usize_unsuffixed(n_bits);
+    quote! {
+        #n_bits
     }
 }

@@ -38,15 +38,27 @@ impl Field {
         }
     }
 
-    pub fn needed_bits_code(&self) -> TokenStream {
+    pub fn min_bits_code(&self) -> TokenStream {
         match self {
-            Field::Normal(normal_field) => normal::needed_bits(normal_field),
-            Field::PaddBits(n_bits) => padding::needed_bits(*n_bits),
-            Field::ControlList { bits, .. } => control_list::needed_bits(*bits),
-            Field::ControlOption(_) => control_option::needed_bits(),
-            Field::Option { inner_type, .. } => option::needed_bits(inner_type),
-            Field::List { inner_type, max_len, .. } => list::needed_bits(inner_type, *max_len),
-            Field::Array { inner_type, length, .. } => array::needed_bits(inner_type, length),
+            Field::Normal(normal_field) => normal::min_bits(normal_field),
+            Field::PaddBits(n_bits) => padding::min_bits(*n_bits),
+            Field::ControlList { bits, .. } => control_list::min_bits(*bits),
+            Field::ControlOption(_) => control_option::min_bits(),
+            Field::Option { inner_type, .. } => option::min_bits(inner_type),
+            Field::List { inner_type, .. } => list::min_bits(inner_type),
+            Field::Array { inner_type, length, .. } => array::min_bits(inner_type, length),
+        }
+    }
+
+    pub fn max_bits_code(&self) -> TokenStream {
+        match self {
+            Field::Normal(normal_field) => normal::max_bits(normal_field),
+            Field::PaddBits(n_bits) => padding::max_bits(*n_bits),
+            Field::ControlList { bits, .. } => control_list::max_bits(*bits),
+            Field::ControlOption(_) => control_option::max_bits(),
+            Field::Option { inner_type, .. } => option::max_bits(inner_type),
+            Field::List { inner_type, max_len, .. } => list::max_bits(inner_type, *max_len),
+            Field::Array { inner_type, length, .. } => array::max_bits(inner_type, length),
         }
     }
 }

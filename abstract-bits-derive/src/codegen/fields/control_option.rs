@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{quote_spanned, quote};
+use quote::{quote, quote_spanned};
 use syn::Ident;
 
 pub fn read(controlled: &Ident) -> TokenStream {
@@ -19,9 +19,10 @@ pub fn write(controlled: &Ident) -> TokenStream {
     }
 }
 
-pub(crate) fn needed_bits() -> TokenStream {
-    quote! { 
-        min += 1;
-        max += 1;
-    }
+pub(crate) fn min_bits() -> TokenStream {
+    quote! { 1 }
+}
+
+pub(crate) fn max_bits() -> TokenStream {
+    quote! { 1 }
 }

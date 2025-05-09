@@ -24,11 +24,15 @@ pub(crate) fn read(field: &NormalField) -> TokenStream {
     }
 }
 
-pub(crate) fn needed_bits(inner_type: &NormalField, max_len: usize) -> TokenStream {
+pub(crate) fn min_bits(inner_type: &NormalField) -> TokenStream {
+    quote_spanned! {inner_type.ident.span()=>
+        0
+    }
+}
+
+pub(crate) fn max_bits(inner_type: &NormalField, max_len: usize) -> TokenStream {
     let ty = &inner_type.out_ty;
     quote_spanned! {inner_type.ident.span()=>
-        let per_element_range = #ty::needed_bits();
-        min += 0;
-        max += #max_len * range.end();
+        #max_len * <#ty as ::abstract_bits::AbstractBits>::MAX_BITS
     }
 }

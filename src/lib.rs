@@ -5,7 +5,6 @@ pub use arbitrary_int::{u1, u2, u3, u4, u5, u6, u7};
 pub use bitvec;
 use bitvec::order::Lsb0;
 use bitvec::slice::BitSlice;
-use core::ops::RangeInclusive;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum FromBytesError {
@@ -36,7 +35,8 @@ pub enum ToBytesError {
 }
 
 pub trait AbstractBits {
-    fn needed_bits(&self) -> RangeInclusive<usize>;
+    const MIN_BITS: usize;
+    const MAX_BITS: usize;
     /// To get the amount written use [`BitWriter::bits_written`]
     /// or [`BitWriter::bytes_written`]
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError>;
@@ -47,7 +47,8 @@ pub trait AbstractBits {
         Self: Sized;
 
     fn to_abstract_bits(&self) -> Result<Vec<u8>, ToBytesError> {
-        let mut buffer = vec![0u8; 100];
+        let needed_bytes = Self::MAX_BITS.div_ceil(8);
+        let mut buffer = vec![0u8; needed_bytes];
         let mut writer = BitWriter::from(buffer.as_mut_slice());
         self.write_abstract_bits(&mut writer)?;
         let bytes = writer.bytes_written();
@@ -67,9 +68,8 @@ pub trait AbstractBits {
 macro_rules! impl_abstract_bits_for_UInt {
     ($base_type:ty, $write_method:ident, $read_method: ident) => {
         impl<const N: usize> AbstractBits for arbitrary_int::UInt<$base_type, N> {
-            fn needed_bits(&self) -> RangeInclusive<usize> {
-                Self::BITS..=Self::BITS
-            }
+            const MIN_BITS: usize = Self::BITS;
+            const MAX_BITS: usize = Self::BITS;
 
             fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
                 writer
@@ -104,11 +104,8 @@ impl_abstract_bits_for_UInt! {u64, write_u64, read_u64}
 macro_rules! impl_abstract_bits_for_core_int {
     ($type:ty, $write_method:ident, $read_method:ident, $bits:literal) => {
         impl AbstractBits for $type {
-            fn needed_bits(&self) -> RangeInclusive<usize> {
-                const { assert!(core::mem::size_of::<Self>() * 8 == $bits) }
-                let size = core::mem::size_of::<Self>() * 8;
-                size..=size
-            }
+            const MIN_BITS: usize = core::mem::size_of::<Self>() * 8;
+            const MAX_BITS: usize = core::mem::size_of::<Self>() * 8;
 
             fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
                 writer
@@ -140,9 +137,8 @@ impl_abstract_bits_for_core_int! {u32, write_u32, read_u32, 32}
 impl_abstract_bits_for_core_int! {u64, write_u64, read_u64, 64}
 
 impl AbstractBits for bool {
-    fn needed_bits(&self) -> RangeInclusive<usize> {
-        1..=1
-    }
+    const MIN_BITS: usize = 1;
+    const MAX_BITS: usize = 1;
 
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
         writer
@@ -167,10 +163,8 @@ impl AbstractBits for bool {
 }
 
 impl<const N: usize, T: AbstractBits + Sized> AbstractBits for [T; N] {
-    fn needed_bits(&self) -> RangeInclusive<usize> {
-        let size = self.iter().map(|item| *item.needed_bits().end()).sum();
-        size..=size
-    }
+    const MIN_BITS: usize = T::MIN_BITS * N;
+    const MAX_BITS: usize = T::MAX_BITS * N;
 
     fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
         for element in self.iter() {
@@ -235,7 +229,7 @@ impl BitReader<'_> {
         self.pos.div_ceil(8)
     }
     pub fn skip(&mut self, n_bits: usize) -> Result<(), UnexpectedEndOfBits> {
-        if self.pos + n_bits <= self.buf.len() {
+        if self.pos + n_bits >= self.buf.len() {
             Err(UnexpectedEndOfBits {
                 n_bits,
                 bits_needed: self.pos + n_bits - self.buf.len(),
@@ -276,6 +270,14 @@ pub struct BitWriter<'a> {
     buf: &'a mut BitSlice<u8, Lsb0>,
 }
 
+impl core::fmt::Debug for BitWriter<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BitWriter\n")?;
+        f.write_fmt(format_args!("\tpos: {}\n", self.pos))?;
+        f.write_fmt(format_args!("\tbuf: BitSlice of {} bits\n", self.buf.len()))
+    }
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error(
     "Buffer is too small to serialize `{n_bits}` into. \
@@ -291,7 +293,7 @@ macro_rules! write_primitive {
         fn $name(&mut self, n_bits: usize, val: $ty) -> Result<(), BufferTooSmall> {
             let val = val.to_le_bytes();
             let val = BitSlice::<_, Lsb0>::from_slice(&val);
-            if self.buf.len() <= self.pos + n_bits {
+            if self.pos + n_bits >= self.buf.len() {
                 Err(BufferTooSmall {
                     n_bits,
                     bits_needed: self.buf.len() - (self.pos + n_bits),
@@ -314,10 +316,10 @@ impl BitWriter<'_> {
         self.pos.div_ceil(8)
     }
     pub fn skip(&mut self, n_bits: usize) -> Result<(), BufferTooSmall> {
-        if self.pos + n_bits <= self.buf.len() {
+        if self.pos + n_bits >= self.buf.len() {
             Err(BufferTooSmall {
                 n_bits,
-                bits_needed: self.pos + n_bits - self.buf.len(),
+                bits_needed: (self.pos + n_bits) - self.buf.len(),
             })
         } else {
             self.pos += n_bits;
@@ -325,7 +327,7 @@ impl BitWriter<'_> {
         }
     }
     fn write_bit(&mut self, bit: bool) -> Result<(), BufferTooSmall> {
-        if self.pos + 1 <= self.buf.len() {
+        if self.pos >= self.buf.len() {
             Err(BufferTooSmall {
                 n_bits: 1,
                 bits_needed: 1,

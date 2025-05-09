@@ -51,10 +51,14 @@ pub(crate) fn write(field: &syn::Field) -> TokenStream {
     }
 }
 
-pub(crate) fn needed_bits(inner_type: &syn::Type, length: &syn::Expr) -> TokenStream {
+pub(crate) fn min_bits(inner_type: &syn::Type, length: &syn::Expr) -> TokenStream {
     quote_spanned! {inner_type.span()=>
-        let per_element_range = #inner_type::needed_bits();
-        min += 0;
-        max += #length * range.end();
+        <#inner_type as ::abstract_bits::AbstractBits>::MIN_BITS * #length
+    }
+}
+
+pub(crate) fn max_bits(inner_type: &syn::Type, length: &syn::Expr) -> TokenStream {
+    quote_spanned! {inner_type.span()=>
+        <#inner_type as ::abstract_bits::AbstractBits>::MAX_BITS * #length
     }
 }
