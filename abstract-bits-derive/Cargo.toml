@@ -7,7 +7,7 @@ rust-version = "1.86"
 description = "Turn bit & byte sequences into normal structs"
 repository = "https://github.com/dvdsk/abstract-bits"
 
-license = "Apache-2.0 & MIT"
+license = "Apache-2.0 OR MIT"
 authors = ["David Kleingeld"]
 
 [dependencies]
