@@ -1,11 +1,13 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::Ident;
 
-pub fn read(controlled: &Ident) -> TokenStream {
+pub fn read(controlled: &Ident, struct_name: &Literal) -> TokenStream {
+    let option_controlled = Literal::string(&controlled.to_string());
     let controller_ident = super::option::is_some_ident(controlled);
     quote_spanned! {controlled.span()=>
-        let #controller_ident = bool::read_abstract_bits(reader)?;
+        let #controller_ident = bool::read_abstract_bits(reader)
+            .map_err(|cause| cause.read_option_controller(#struct_name, #option_controlled))?;
     }
 }
 

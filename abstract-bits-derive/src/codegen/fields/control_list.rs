@@ -1,20 +1,23 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::Ident;
 
 use crate::codegen::{is_primitive, list_len_ident};
 
-pub fn read(controlled: &Ident, bits: usize) -> TokenStream {
+pub fn read(controlled: &Ident, bits: usize, struct_name: &Literal) -> TokenStream {
+    let list_name = Literal::string(&controlled.to_string());
     let len_ident = list_len_ident(controlled);
     if let Some(ty) = is_primitive(bits) {
         quote_spanned! {controlled.span()=>
-            let #len_ident = #ty::read_abstract_bits(reader)?;
+            let #len_ident = #ty::read_abstract_bits(reader)
+                .map_err(|cause| cause.read_list_length(#struct_name, #list_name))?;
         }
     } else {
         let utype: syn::Type =
             syn::parse_str(&format!("::abstract_bits::u{bits}")).expect("valid type path");
         quote_spanned! {controlled.span()=>
-            let #len_ident = #utype::read_abstract_bits(reader)?;
+            let #len_ident = #utype::read_abstract_bits(reader)
+                .map_err(|cause| cause.read_list_length(#struct_name, #list_name))?;
             let #len_ident = #len_ident.value();
         }
     }

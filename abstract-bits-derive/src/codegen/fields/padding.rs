@@ -1,26 +1,27 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
-pub fn read(n_bits: u8, struct_name: &syn::Ident) -> TokenStream {
+pub fn read(n_bits: u8, struct_name: &Literal) -> TokenStream {
     let n_bits = proc_macro2::Literal::usize_suffixed(n_bits as usize);
-    let name = proc_macro2::Literal::string(&struct_name.to_string());
     quote! {
         reader.skip(#n_bits)
-            .map_err(|cause| ::abstract_bits::FromBytesError::SkipPadding {
+            .map_err(|cause| ::abstract_bits::ReadErrorCause::NotEnoughInput {
+                ty: "-",
+                cause
+            }).map_err(|cause| ::abstract_bits::FromBytesError::SkipPadding {
+                struct_name: #struct_name,
                 cause,
-                in_struct: #name,
             })?;
     }
 }
 
-pub fn write(n_bits: u8, struct_name: &syn::Ident) -> TokenStream {
+pub fn write(n_bits: u8, struct_name: &Literal) -> TokenStream {
     let n_bits = proc_macro2::Literal::usize_suffixed(n_bits as usize);
-    let name = proc_macro2::Literal::string(&struct_name.to_string());
     quote! {
         writer.skip(#n_bits)
             .map_err(|cause| ::abstract_bits::ToBytesError::AddPadding {
                 cause,
-                in_struct: #name,
+                struct_name: #struct_name,
             })?;
     }
 }

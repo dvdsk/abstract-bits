@@ -6,41 +6,8 @@ pub use bitvec;
 use bitvec::order::Lsb0;
 use bitvec::slice::BitSlice;
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum FromBytesError {
-    #[error("Got invalid discriminant {got} while deserializing enum {ty}")]
-    InvalidDiscriminant { ty: &'static str, got: usize },
-    #[error("Could not deserialize primitive while deserializing {ty}")]
-    NotEnoughInput {
-        ty: &'static str,
-        #[source]
-        cause: UnexpectedEndOfBits,
-    },
-    #[error("Could not skip over specified bit padding in {in_struct} while serializing")]
-    SkipPadding {
-        in_struct: &'static str,
-        #[source]
-        cause: UnexpectedEndOfBits,
-    },
-}
-
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ToBytesError {
-    #[error("List too long to fit. Max length {max}, got: {got}")]
-    ListTooLong { max: usize, got: usize },
-    #[error("Buffer is too small to serialize {ty} into")]
-    BufferTooSmall {
-        ty: &'static str,
-        #[source]
-        cause: BufferTooSmall,
-    },
-    #[error("Buffer is too small to add bit padding specified in {in_struct}")]
-    AddPadding {
-        in_struct: &'static str,
-        #[source]
-        cause: BufferTooSmall,
-    },
-}
+mod error;
+pub use error::{FromBytesError, ReadErrorCause, ToBytesError};
 
 pub trait AbstractBits {
     const MIN_BITS: usize;
@@ -92,11 +59,12 @@ macro_rules! impl_abstract_bits_for_UInt {
             where
                 Self: Sized,
             {
+                use FromBytesError::ReadPrimitive;
                 let value = reader.$read_method(Self::BITS).map_err(|cause| {
-                    FromBytesError::NotEnoughInput {
+                    ReadPrimitive(ReadErrorCause::NotEnoughInput {
                         ty: std::any::type_name::<Self>(),
                         cause,
-                    }
+                    })
                 })?;
                 Ok(Self::new(value))
             }
@@ -128,12 +96,13 @@ macro_rules! impl_abstract_bits_for_core_int {
             where
                 Self: Sized,
             {
-                reader
-                    .$read_method($bits)
-                    .map_err(|cause| FromBytesError::NotEnoughInput {
+                use FromBytesError::ReadPrimitive;
+                reader.$read_method($bits).map_err(|cause| {
+                    ReadPrimitive(ReadErrorCause::NotEnoughInput {
                         ty: std::any::type_name::<Self>(),
                         cause,
                     })
+                })
             }
         }
     };
@@ -161,12 +130,13 @@ impl AbstractBits for bool {
     where
         Self: Sized,
     {
-        reader
-            .read_bit()
-            .map_err(|cause| FromBytesError::NotEnoughInput {
+        use FromBytesError::ReadPrimitive;
+        reader.read_bit().map_err(|cause| {
+            ReadPrimitive(ReadErrorCause::NotEnoughInput {
                 ty: core::any::type_name::<Self>(),
                 cause,
             })
+        })
     }
 }
 
@@ -214,7 +184,7 @@ macro_rules! read_primitive {
         fn $name(&mut self, n_bits: usize) -> Result<$ty, UnexpectedEndOfBits> {
             let mut res = <$ty>::default().to_le_bytes();
             let res_bits = BitSlice::<_, Lsb0>::from_slice_mut(&mut res);
-            if self.buf.len() <= self.pos + n_bits {
+            if self.buf.len() < self.pos + n_bits {
                 Err(UnexpectedEndOfBits {
                     n_bits,
                     bits_needed: self.pos + n_bits - self.buf.len(),
@@ -301,7 +271,7 @@ macro_rules! write_primitive {
         fn $name(&mut self, n_bits: usize, val: $ty) -> Result<(), BufferTooSmall> {
             let val = val.to_le_bytes();
             let val = BitSlice::<_, Lsb0>::from_slice(&val);
-            if self.pos + n_bits >= self.buf.len() {
+            if self.pos + n_bits > self.buf.len() {
                 Err(BufferTooSmall {
                     n_bits,
                     bits_needed: self.buf.len() - (self.pos + n_bits),

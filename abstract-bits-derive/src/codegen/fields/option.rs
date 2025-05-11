@@ -1,18 +1,46 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote_spanned};
-use syn::spanned::Spanned;
 use syn::Ident;
+use syn::spanned::Spanned;
 
+use crate::codegen::generics_to_fully_qualified;
 use crate::model::NormalField;
 
 pub fn is_some_ident(controlled: &Ident) -> Ident {
     format_ident!("{controlled}_is_some")
 }
 
-pub fn read(field: &NormalField) -> TokenStream {
+pub fn read_field_code(
+    NormalField {
+        ident,
+        out_ty,
+        bits,
+        ..
+    }: &NormalField,
+    struct_name: &Literal,
+) -> TokenStream {
+    let field_name = proc_macro2::Literal::string(&ident.to_string());
+    if let Some(bits) = bits {
+        let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))
+            .expect("should be valid type path");
+        quote_spanned! {out_ty.span()=>
+            let #ident = #utype::read_abstract_bits(reader)
+                .map_err(|cause| cause.read_option(#struct_name, #field_name))?;
+            let #ident = #ident.value();
+        }
+    } else {
+        let out_ty = generics_to_fully_qualified(out_ty.clone());
+        quote_spanned! {out_ty.span()=>
+            let #ident = #out_ty::read_abstract_bits(reader)
+                .map_err(|cause| cause.read_option(#struct_name, #field_name))?;
+        }
+    }
+}
+
+pub fn read(field: &NormalField, struct_name: &Literal) -> TokenStream {
     let is_some_ident = is_some_ident(&field.ident);
     let field_ident = &field.ident;
-    let field_read_code = super::normal::read(field);
+    let field_read_code = read_field_code(field, struct_name);
     quote_spanned! {field.ident.span()=>
         let #field_ident = if #is_some_ident {
             #field_read_code

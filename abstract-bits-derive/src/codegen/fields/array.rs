@@ -1,16 +1,26 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::quote_spanned;
 use syn::spanned::Spanned;
 
-pub(crate) fn read(length: &syn::Expr, ty: &syn::Type, field: &syn::Field) -> TokenStream {
+// TO-Do remove unsafe:
+// generate:
+// `return Ok([read()?, read()?, read()?, read()?])`
+pub(crate) fn read(
+    length: &syn::Expr,
+    ty: &syn::Type,
+    field: &syn::Field,
+    struct_name: &Literal,
+) -> TokenStream {
     let field_ident = &field.ident;
+    let field_name = Literal::string(&field_ident.as_ref().map(|i| i.to_string()).unwrap_or_default());
+
     quote_spanned! {field.ident.span()=>
         const LEN: usize = #length;
 
         // Any panic beyond this pint will leak memory
         let mut array: [::core::mem::MaybeUninit<#ty>; LEN] = unsafe {
             // # SAFETY
-            // MaybeUninit<T> does not require initialization. It also does not
+            // `MaybeUninit<T>` does not require initialization. It also does not
             // drop the `T`.
             ::core::mem::MaybeUninit::uninit().assume_init()
         };
@@ -28,7 +38,7 @@ pub(crate) fn read(length: &syn::Expr, ty: &syn::Type, field: &syn::Field) -> To
                             array[j].assume_init_drop();
                         }
                     }
-                    return Err(e);
+                    return Err(e.read_array(#struct_name, #field_name, LEN));
                 }
             } // match
         } // for

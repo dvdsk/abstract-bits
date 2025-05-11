@@ -1,3 +1,4 @@
+use proc_macro2::Literal;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote_spanned};
 use syn::spanned::Spanned;
@@ -12,18 +13,22 @@ pub fn read(
         bits,
         ..
     }: &NormalField,
+    struct_name: &Literal,
 ) -> TokenStream {
+    let field_name = proc_macro2::Literal::string(&ident.to_string());
     if let Some(bits) = bits {
         let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))
             .expect("should be valid type path");
         quote_spanned! {out_ty.span()=>
-            let #ident = #utype::read_abstract_bits(reader)?;
+            let #ident = #utype::read_abstract_bits(reader)
+                .map_err(|cause| cause.read_field(#struct_name, #field_name))?;
             let #ident = #ident.value();
         }
     } else {
         let out_ty = generics_to_fully_qualified(out_ty.clone());
         quote_spanned! {out_ty.span()=>
-            let #ident = #out_ty::read_abstract_bits(reader)?;
+            let #ident = #out_ty::read_abstract_bits(reader)
+                .map_err(|cause| cause.read_field(#struct_name, #field_name))?;
         }
     }
 }
