@@ -1,8 +1,8 @@
-use abstract_bits::AbstractBits;
+use abstract_bits::{AbstractBits, abstract_bits};
 /// These tests where taken and adapted from the `zigpy/ziggurat` project.
 
 /// Zigbee spec 3.4.2 Route Reply Command
-#[abstract_bits::abstract_bits]
+#[abstract_bits]
 #[derive(Debug, PartialEq)]
 pub struct NwkRouteReplyCommand {
     reserved: u4,
@@ -19,7 +19,7 @@ pub struct NwkRouteReplyCommand {
     pub responder_eui64: Option<Eui64>,
 }
 
-#[abstract_bits::abstract_bits]
+#[abstract_bits]
 #[derive(Debug, Eq, PartialEq)]
 pub struct Eui64(pub [u8; 8]);
 
@@ -41,7 +41,7 @@ impl Eui64 {
     }
 }
 
-#[abstract_bits::abstract_bits]
+#[abstract_bits]
 #[derive(Debug, Eq, PartialEq)]
 pub struct Nwk(pub u16);
 
@@ -68,4 +68,56 @@ fn test_nwk_route_reply_command() {
     );
 
     assert_eq!(command.to_abstract_bits().unwrap(), &bytes);
+}
+
+/// Zigbee spec compressed: 3.4.8.3
+#[abstract_bits]
+#[derive(Debug, PartialEq)]
+pub struct NwkLinkStatusCommand {
+    #[abstract_bits(length_of = link_statuses)]
+    reserved: u5,
+    pub is_first_frame: bool,
+    pub is_last_frame: bool,
+    reserved: u1,
+    pub link_statuses: Vec<NwkLinkStatus>,
+}
+
+/// Zigbee spec 3.4.8
+#[abstract_bits]
+#[derive(Debug, PartialEq)]
+pub struct NwkLinkStatus {
+    pub address: Nwk,
+    pub incoming_cost: u3,
+    reserved: u1,
+    pub outgoing_cost: u3,
+    reserved: u1,
+}
+
+#[test]
+fn test_nwk_link_status_command() {
+    use hex_literal::hex;
+    let bytes = hex!("0862e73c120ac711").to_vec();
+    let command = NwkLinkStatusCommand::from_abstract_bits(&bytes[1..]).unwrap();
+
+    assert_eq!(
+        command,
+        NwkLinkStatusCommand {
+            is_first_frame: true, // byte 0x62 -> 0b01100010
+            is_last_frame: true,
+            link_statuses: vec![
+                NwkLinkStatus {
+                    address: Nwk(0x3CE7), // e7 3c
+                    incoming_cost: 2,     // 12 -> 0b00010010 (inc=2, out=1)
+                    outgoing_cost: 1,
+                },
+                NwkLinkStatus {
+                    address: Nwk(0xC70A), // 0a c7
+                    incoming_cost: 1,     // 11 -> 0b00010001 (inc=1, out=1)
+                    outgoing_cost: 1,
+                },
+            ],
+        }
+    );
+
+    assert_eq!(&command.to_abstract_bits().unwrap(), &bytes[1..]);
 }
