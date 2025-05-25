@@ -6,9 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
 ### Added
 
+
+### Changed
+
+
+### Removed
+
+
+## [0.2.0] - 2025-05-25
 
 ### Changed
 
@@ -16,8 +23,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   need to be named reserved.
 - *Breaking* Instead of `controls` fields determining `Option` presence are now
   annotated with `presence_of`.
-
-### Removed
-
-- Trademark sign previously shown after the project description in version 
-0.3.0

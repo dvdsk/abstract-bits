@@ -111,7 +111,11 @@ impl FromBytesError {
             self
         }
     }
-    pub fn read_option(self, struct_name: &'static str, field_name: &'static str) -> Self {
+    pub fn read_option(
+        self,
+        struct_name: &'static str,
+        field_name: &'static str,
+    ) -> Self {
         if let Self::ReadPrimitive(cause) = self {
             Self::ReadOption {
                 field_name,
@@ -137,7 +141,11 @@ impl FromBytesError {
             self
         }
     }
-    pub fn read_list_length(self, struct_name: &'static str, field_name: &'static str) -> Self {
+    pub fn read_list_length(
+        self,
+        struct_name: &'static str,
+        field_name: &'static str,
+    ) -> Self {
         if let Self::ReadPrimitive(cause) = self {
             Self::ReadListLength {
                 field_name,

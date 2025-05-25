@@ -46,7 +46,10 @@ macro_rules! impl_abstract_bits_for_UInt {
             const MIN_BITS: usize = Self::BITS;
             const MAX_BITS: usize = Self::BITS;
 
-            fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
+            fn write_abstract_bits(
+                &self,
+                writer: &mut BitWriter,
+            ) -> Result<(), ToBytesError> {
                 writer
                     .$write_method(Self::BITS, self.value())
                     .map_err(|cause| ToBytesError::BufferTooSmall {
@@ -83,13 +86,16 @@ macro_rules! impl_abstract_bits_for_core_int {
             const MIN_BITS: usize = core::mem::size_of::<Self>() * 8;
             const MAX_BITS: usize = core::mem::size_of::<Self>() * 8;
 
-            fn write_abstract_bits(&self, writer: &mut BitWriter) -> Result<(), ToBytesError> {
-                writer
-                    .$write_method($bits, *self)
-                    .map_err(|cause| ToBytesError::BufferTooSmall {
+            fn write_abstract_bits(
+                &self,
+                writer: &mut BitWriter,
+            ) -> Result<(), ToBytesError> {
+                writer.$write_method($bits, *self).map_err(|cause| {
+                    ToBytesError::BufferTooSmall {
                         ty: std::any::type_name::<Self>(),
                         cause,
-                    })
+                    }
+                })
             }
 
             fn read_abstract_bits(reader: &mut BitReader) -> Result<Self, FromBytesError>
@@ -190,7 +196,8 @@ macro_rules! read_primitive {
                     bits_needed: self.pos + n_bits - self.buf.len(),
                 })
             } else {
-                res_bits[0..n_bits].copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
+                res_bits[0..n_bits]
+                    .copy_from_bitslice(&self.buf[self.pos..self.pos + n_bits]);
                 self.pos += n_bits;
                 Ok(<$ty>::from_le_bytes(res))
             }

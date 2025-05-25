@@ -1,4 +1,4 @@
-use abstract_bits::{abstract_bits, AbstractBits};
+use abstract_bits::{AbstractBits, abstract_bits};
 
 #[abstract_bits]
 struct LinkStatusCommand {
@@ -16,7 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         is_first_frame: false,
         is_last_frame: true,
         link_statuses: Vec::new(),
-    }.to_abstract_bits()?;
+    }
+    .to_abstract_bits()?;
     let link_status_cmd = LinkStatusCommand::from_abstract_bits(&bytes)?;
     print!("number of links: {}", link_status_cmd.link_statuses.len());
     Ok(())

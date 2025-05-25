@@ -48,7 +48,8 @@ pub struct Nwk(pub u16);
 #[test]
 fn test_nwk_route_reply_command() {
     let bytes: [u8; 23] = [
-        48, 95, 55, 95, 10, 147, 3, 113, 56, 33, 5, 1, 136, 23, 0, 174, 211, 31, 11, 1, 136, 23, 0,
+        48, 95, 55, 95, 10, 147, 3, 113, 56, 33, 5, 1, 136, 23, 0, 174, 211, 31, 11, 1,
+        136, 23, 0,
     ];
 
     dbg!(NwkRouteReplyCommand::MAX_BITS);
