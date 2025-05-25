@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   transformed struct these will transform to the smallest rust primitives that
   can represent them. For example an `u7` will become an `u8`.
 - Add padding (if needed) in between fields using `reserved = u<n>`.
-- For each `Option` field place `#[abstract-bits(controls = <field_name>)]`
+- For each `Option` field place `#[abstract-bits(presence_of = <field_name>)]`
   above the `reserved: bool` fields which controls whether the `Option` is
   `Some` or `None`.
 - For each `Vec` field place `#[abstract-bits(length_of = <field_name>)]`
@@ -86,7 +86,7 @@ use abstract_bits::{abstract_bits, AbstractBits, BitReader};
 #[derive(Debug, PartialEq, Eq)] // note: derives follow after
 struct Frame {
     header: u4,
-    #[abstract_bits(controls = source)]
+    #[abstract_bits(presence_of = source)]
     reserved: bool,
     #[abstract_bits(length_of = data)]
     reserved: u5,

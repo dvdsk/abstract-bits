@@ -3,7 +3,7 @@ use abstract_bits::abstract_bits;
 #[abstract_bits]
 struct Frame {
     header: u4,
-    #[abstract_bits(controls = source)]
+    #[abstract_bits(presence_of = source)]
     reserved: bool,
     #[abstract_bits(length_of = data)]
     reserved: u5,

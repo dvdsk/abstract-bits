@@ -18,8 +18,6 @@ dependencies = [
 [[package]]
 name = "abstract-bits-derive"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7ed95b24ea1d92a55947dbdc0d08fda020d16690fe5c951e845faa740a5cb71"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",

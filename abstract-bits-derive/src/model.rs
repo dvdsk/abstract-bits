@@ -4,6 +4,7 @@ use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 use syn::{Attribute, GenericArgument, Ident, PathArguments, Visibility};
 
+#[derive(Debug)]
 pub struct Model {
     pub attrs: Vec<Attribute>,
     pub vis: Visibility,
@@ -11,12 +12,14 @@ pub struct Model {
     pub ty: Type,
 }
 
+#[derive(Debug)]
 pub struct EmptyVariant {
     pub attrs: Vec<Attribute>,
     pub ident: Ident,
     pub discriminant: usize,
 }
 
+#[derive(Debug)]
 pub enum Type {
     NormalStruct(Vec<Field>),
     UnitStruct(syn::Field),
@@ -144,57 +147,51 @@ fn padding_from_type(ty: &syn::Type) -> Result<u8, (&'static str, Span)> {
 
 impl Field {
     fn from(field: syn::Field, previous_fields: &[Field]) -> Self {
-        match &field.ident {
-            Some(ident) if *ident == "reserved" => {
-                if let Some(option_ident) = controls_option(&field) {
-                    Self::ControlOption(option_ident)
-                } else if let Some(list_ident) = controls_list(&field) {
-                    let bits = padding_from_type(&field.ty)
-                        .unwrap_or_else(|(msg, span)| abort!(span, msg));
-                    Self::ControlList {
-                        controlled: list_ident,
-                        bits: bits as usize,
-                    }
-                } else {
-                    let padding = padding_from_type(&field.ty)
-                        .unwrap_or_else(|(msg, span)| abort!(span, msg));
-                    Self::PaddBits(padding)
-                }
+        let ident = field
+            .ident
+            .as_ref()
+            .expect("unit structs are not tranformed into model::Field");
+        if let Some(controlled) = controls_option(&field) {
+            Self::ControlOption(controlled)
+        } else if let Some(controlled) = controls_list(&field) {
+            let bits = padding_from_type(&field.ty)
+                .unwrap_or_else(|(msg, span)| abort!(span, msg));
+            Self::ControlList {
+                controlled,
+                bits: bits as usize,
             }
-            Some(_) => {
-                if let Some(option_stripped) = strip_option(field.clone()) {
-                    Self::Option {
-                        inner_type: NormalField::from(option_stripped),
-                        full_type: NormalField::from(field),
-                    }
-                } else if let Some(vec_stripped) = strip_vec(field.clone()) {
-                    Self::List {
-                        inner_type: NormalField::from(vec_stripped),
-                        max_len: max_size_from_control_list(&field.ident, previous_fields),
-                        full_type: NormalField::from(field),
-                    }
-                } else if let syn::Type::Array(a) = &field.ty {
-                    Self::Array {
-                        inner_type: *a.elem.clone(),
-                        length: a.len.clone(),
-                        field,
-                    }
-                } else {
-                    Self::Normal(NormalField::from(field))
-                }
+        } else if ident == "reserved" {
+            let padding = padding_from_type(&field.ty)
+                .unwrap_or_else(|(msg, span)| abort!(span, msg));
+            Self::PaddBits(padding)
+        } else if let Some(option_stripped) = strip_option(field.clone()) {
+            Self::Option {
+                inner_type: NormalField::from(option_stripped),
+                full_type: NormalField::from(field),
             }
-            None => unreachable!("unit structs are not tranformed into model::Field"),
+        } else if let Some(vec_stripped) = strip_vec(field.clone()) {
+            Self::List {
+                inner_type: NormalField::from(vec_stripped),
+                max_len: max_size_from_control_list(&ident, previous_fields),
+                full_type: NormalField::from(field),
+            }
+        } else if let syn::Type::Array(a) = &field.ty {
+            Self::Array {
+                inner_type: *a.elem.clone(),
+                length: a.len.clone(),
+                field,
+            }
+        } else {
+            Self::Normal(NormalField::from(field))
         }
     }
 }
 
-fn max_size_from_control_list(ident: &Option<syn::Ident>, previous_fields: &[Field]) -> usize {
-    let ident = ident.as_ref().expect(
-        "NormalField::from would have already aborted \
-        if ident is None",
-    );
+fn max_size_from_control_list(ident: &syn::Ident, previous_fields: &[Field]) -> usize {
     if let Some(bits) = previous_fields.iter().find_map(|f| match f {
-        Field::ControlList { controlled, bits } if controlled == ident => Some(bits),
+        Field::ControlList {
+            controlled, bits, ..
+        } if controlled == ident => Some(bits),
         _ => None,
     }) {
         2usize.pow(*bits as u32)
@@ -244,7 +241,7 @@ fn controls_option(field: &syn::Field) -> Option<Ident> {
         };
         let mut tokens = list.tokens.clone().into_iter();
         match tokens.next() {
-            Some(TokenTree::Ident(ident)) if ident == "controls" => (),
+            Some(TokenTree::Ident(ident)) if ident == "presence_of" => (),
             _ => return None,
         }
         match tokens.next() {
@@ -265,7 +262,7 @@ fn controls_option(field: &syn::Field) -> Option<Ident> {
     match parse(attr)? {
         Ok(ident) => Some(ident),
         Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
-            help = "The syntax is: #[abstract_bits(controls = <ident>)] with ident \
+            help = "The syntax is: #[abstract_bits(presence_of = <ident>)] with ident \
             a later option type field"),
     }
 }
@@ -369,12 +366,9 @@ impl Model {
             .ident
             .is_none();
         let ty = if is_unit {
-            let field = item
-                .fields
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| abort!(item.span(), "Zero sized struct not supported"));
+            let field = item.fields.clone().into_iter().next().unwrap_or_else(|| {
+                abort!(item.span(), "Zero sized struct not supported")
+            });
             Type::UnitStruct(field)
         } else {
             let mut fields = Vec::new();

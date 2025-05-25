@@ -4,7 +4,7 @@ use abstract_bits::{AbstractBits, abstract_bits};
 #[derive(Debug, PartialEq, Eq)]
 struct Frame {
     header: u4,
-    #[abstract_bits(controls = source)]
+    #[abstract_bits(presence_of = source)]
     reserved: bool,
     #[abstract_bits(length_of = data)]
     reserved: u5,
