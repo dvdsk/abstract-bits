@@ -1,14 +1,11 @@
 use proc_macro2::{Literal, TokenStream};
-use quote::{format_ident, quote_spanned};
+use quote::quote_spanned;
 use syn::Ident;
 use syn::spanned::Spanned;
 
 use crate::codegen::generics_to_fully_qualified;
 use crate::model::NormalField;
 
-pub fn is_some_ident(controlled: &Ident) -> Ident {
-    format_ident!("{controlled}_is_some")
-}
 
 pub fn read_field_code(
     NormalField {
@@ -37,21 +34,29 @@ pub fn read_field_code(
     }
 }
 
-pub fn read(field: &NormalField, struct_name: &Literal) -> TokenStream {
-    let is_some_ident = is_some_ident(&field.ident);
+pub fn read(field: &NormalField, controller: &Option<Ident>, struct_name: &Literal) -> TokenStream {
     let field_ident = &field.ident;
     let field_read_code = read_field_code(field, struct_name);
-    quote_spanned! {field.ident.span()=>
-        let #field_ident = if #is_some_ident {
-            #field_read_code
-            Some(#field_ident)
-        } else {
-            None
-        };
+    
+    match controller {
+        Some(controller_ident) => {
+            // Use the controller field that was already read
+            quote_spanned! {field.ident.span()=>
+                let #field_ident = if #controller_ident {
+                    #field_read_code
+                    Some(#field_ident)
+                } else {
+                    None
+                };
+            }
+        }
+        None => {
+            panic!("Option field without controller")
+        }
     }
 }
 
-pub fn write(field: &NormalField) -> TokenStream {
+pub fn write(field: &NormalField, controller: &Option<Ident>) -> TokenStream {
     let field_ident = &field.ident;
     let write_code = if let Some(bits) = field.bits {
         let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))
@@ -66,11 +71,35 @@ pub fn write(field: &NormalField) -> TokenStream {
         }
     };
 
-    quote_spanned!(field_ident.span()=>
-        if let Some(ref #field_ident) = self.#field_ident {
-            #write_code
+    match controller {
+        Some(controller_ident) => {
+            // Validate that controller field matches the presence of the option
+            quote_spanned!(field_ident.span()=>
+                // Validation: ensure controller field matches option presence
+                match (self.#controller_ident, self.#field_ident.is_some()) {
+                    (true, true) | (false, false) => {
+                        // Valid combination - controller matches presence
+                        if let Some(ref #field_ident) = self.#field_ident {
+                            #write_code
+                        }
+                    }
+                    (true, false) => {
+                        return Err(::abstract_bits::ToBytesError::ValidationError(
+                            format!("Field '{}' controller is true but option is None", stringify!(#field_ident))
+                        ));
+                    }
+                    (false, true) => {
+                        return Err(::abstract_bits::ToBytesError::ValidationError(
+                            format!("Field '{}' controller is false but option is Some", stringify!(#field_ident))
+                        ));
+                    }
+                }
+            )
         }
-    )
+        None => {
+            panic!("Option field without controller")
+        }
+    }
 }
 
 pub(crate) fn min_bits(inner_type: &NormalField) -> TokenStream {

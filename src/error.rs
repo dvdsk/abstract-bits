@@ -208,4 +208,6 @@ pub enum ToBytesError {
         #[source]
         cause: BufferTooSmall,
     },
+    #[error("Validation error: {0}")]
+    ValidationError(String),
 }

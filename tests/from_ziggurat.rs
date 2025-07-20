@@ -6,16 +6,16 @@ use abstract_bits::{AbstractBits, abstract_bits};
 #[derive(Debug, PartialEq)]
 pub struct NwkRouteReplyCommand {
     reserved: u4,
-    #[abstract_bits(presence_of = originator_eui64)]
-    reserved: bool,
-    #[abstract_bits(presence_of = responder_eui64)]
-    reserved: bool,
+    has_originator_eui64: bool,
+    has_responder_eui64: bool,
     reserved: u2,
     pub route_request_identifier: u8,
     pub originator_nwk: Nwk,
     pub responder_nwk: Nwk,
     pub path_cost: u8,
+    #[abstract_bits(presence_from = has_originator_eui64)]
     pub originator_eui64: Option<Eui64>,
+    #[abstract_bits(presence_from = has_responder_eui64)]
     pub responder_eui64: Option<Eui64>,
 }
 
@@ -63,6 +63,8 @@ fn test_nwk_route_reply_command() {
             originator_nwk: Nwk(0x5F37),
             responder_nwk: Nwk(0x930A),
             path_cost: 3,
+            has_originator_eui64: true,
+            has_responder_eui64: true,
             originator_eui64: Some(dbg!(Eui64::from_hex("00:17:88:01:05:21:38:71"))),
             responder_eui64: Some(dbg!(Eui64::from_hex("00:17:88:01:0b:1f:d3:ae"))),
         }
@@ -75,11 +77,11 @@ fn test_nwk_route_reply_command() {
 #[abstract_bits]
 #[derive(Debug, PartialEq)]
 pub struct NwkLinkStatusCommand {
-    #[abstract_bits(length_of = link_statuses)]
-    reserved: u5,
+    link_statuses_len: u5,
     pub is_first_frame: bool,
     pub is_last_frame: bool,
     reserved: u1,
+    #[abstract_bits(length_from = link_statuses_len)]
     pub link_statuses: Vec<NwkLinkStatus>,
 }
 
@@ -103,6 +105,7 @@ fn test_nwk_link_status_command() {
     assert_eq!(
         command,
         NwkLinkStatusCommand {
+            link_statuses_len: 2,
             is_first_frame: true, // byte 0x62 -> 0b01100010
             is_last_frame: true,
             link_statuses: vec![
