@@ -26,11 +26,11 @@ use abstract_bits::{abstract_bits, AbstractBits};
 
 #[abstract_bits]
 struct LinkStatusCommand {
-    link_stautses_len: u5,
+    link_statuses_len: u5,
     is_first_frame: bool,
     is_last_frame: bool,
     reserved: u1,
-    #[abstract_bits(length_from = link_stautses_len)]
+    #[abstract_bits(length_from = link_statuses_len)]
     link_statuses: Vec<LinkStatus>,
 }
 
@@ -45,7 +45,7 @@ struct LinkStatus {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bytes = LinkStatusCommand {
-        link_stautses_len: 0,
+        link_statuses_len: 0,
         is_first_frame: false,
         is_last_frame: true,
         link_statuses: Vec::new(),

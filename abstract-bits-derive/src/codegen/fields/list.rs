@@ -6,17 +6,16 @@ use crate::model::NormalField;
 
 pub(crate) fn write(inner_type: &NormalField, controller: &Option<Ident>) -> TokenStream {
     let field_ident = &inner_type.ident;
-    
+
     match controller {
         Some(controller_ident) => {
             // Validate that controller field matches the vector length
             quote_spanned! {field_ident.span()=>
-                // Validation: ensure controller field matches vector length
                 if self.#controller_ident as usize != self.#field_ident.len() {
                     return Err(::abstract_bits::ToBytesError::ValidationError(
-                        format!("Field '{}' length controller is {} but vector has {} elements", 
-                            stringify!(#field_ident), 
-                            self.#controller_ident, 
+                        format!("Field '{}' length controller is {} but vector has {} elements",
+                            stringify!(#field_ident),
+                            self.#controller_ident,
                             self.#field_ident.len())
                     ));
                 }
@@ -36,7 +35,7 @@ pub(crate) fn write(inner_type: &NormalField, controller: &Option<Ident>) -> Tok
 pub(crate) fn read(field: &NormalField, controller: &Option<Ident>, struct_name: &Literal) -> TokenStream {
     let field_name = Literal::string(&field.ident.to_string());
     let field_ident = &field.ident;
-    
+
     match controller {
         Some(controller_ident) => {
             quote_spanned! {field.ident.span()=>
@@ -45,7 +44,7 @@ pub(crate) fn read(field: &NormalField, controller: &Option<Ident>, struct_name:
                     ::abstract_bits::AbstractBits::read_abstract_bits(reader)
                 )
                     .collect::<Result<_, ::abstract_bits::FromBytesError>>()
-                    .map_err(|cause| cause.read_list(#struct_name, 
+                    .map_err(|cause| cause.read_list(#struct_name,
                             #field_name, #controller_ident as usize));
                 let #field_ident = res?;
             }

@@ -101,7 +101,6 @@ fn filter_abstract_bits_attrs(attrs: Vec<Attribute>) -> Vec<Attribute> {
 
 
 impl Field {
-
     pub fn needed_in_struct_def(&self) -> Option<NormalField> {
         match self {
             Field::Normal(field)
@@ -187,6 +186,34 @@ impl Field {
     }
 }
 
+
+fn max_size_from_controller_field(controller_ident: &syn::Ident, previous_fields: &[Field]) -> usize {
+    // Look for the controller field in previous_fields
+    if let Some(ident) = previous_fields.iter().find_map(|f| match f {
+        Field::Normal(nf) if nf.ident == *controller_ident => Some(nf),
+        _ => None,
+    }) {
+        if let Some(bits) = ident.bits {
+            // Custom bit type (e.g., u3, u5)
+            2usize.pow(bits as u32)
+        } else {
+            // Standard type - extract bits from the type name
+            if let Ok(bits) = padding_from_type(&ident.out_ty) {
+                2usize.pow(bits as u32)
+            } else {
+                abort!(
+                    controller_ident.span(),
+                    "Controller field '{}' must be a numeric type with known bit size", controller_ident
+                );
+            }
+        }
+    } else {
+        abort!(
+            controller_ident.span(),
+            "Controller field '{}' not found", controller_ident
+        );
+    }
+}
 
 
 fn strip_vec(field: syn::Field) -> Option<syn::Field> {
@@ -438,34 +465,6 @@ fn require_usize(expr: syn::Expr) -> usize {
             .expect("only valid numbers can be enum discriminant")
     } else {
         unreachable!("only digits form a valid enum discriminant expression")
-    }
-}
-
-fn max_size_from_controller_field(controller_ident: &syn::Ident, previous_fields: &[Field]) -> usize {
-    // Look for the controller field in previous_fields
-    if let Some(controller_field) = previous_fields.iter().find_map(|f| match f {
-        Field::Normal(nf) if nf.ident == *controller_ident => Some(nf),
-        _ => None,
-    }) {
-        if let Some(bits) = controller_field.bits {
-            // Custom bit type (e.g., u3, u5)
-            2usize.pow(bits as u32)
-        } else {
-            // Standard type - extract bits from the type name
-            if let Ok(bits) = padding_from_type(&controller_field.out_ty) {
-                2usize.pow(bits as u32)
-            } else {
-                abort!(
-                    controller_ident.span(),
-                    "Controller field '{}' must be a numeric type with known bit size", controller_ident
-                );
-            }
-        }
-    } else {
-        abort!(
-            controller_ident.span(),
-            "Controller field '{}' not found", controller_ident
-        );
     }
 }
 

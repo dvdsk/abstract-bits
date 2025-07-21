@@ -37,10 +37,9 @@ pub fn read_field_code(
 pub fn read(field: &NormalField, controller: &Option<Ident>, struct_name: &Literal) -> TokenStream {
     let field_ident = &field.ident;
     let field_read_code = read_field_code(field, struct_name);
-    
+
     match controller {
         Some(controller_ident) => {
-            // Use the controller field that was already read
             quote_spanned! {field.ident.span()=>
                 let #field_ident = if #controller_ident {
                     #field_read_code
@@ -75,24 +74,14 @@ pub fn write(field: &NormalField, controller: &Option<Ident>) -> TokenStream {
         Some(controller_ident) => {
             // Validate that controller field matches the presence of the option
             quote_spanned!(field_ident.span()=>
-                // Validation: ensure controller field matches option presence
-                match (self.#controller_ident, self.#field_ident.is_some()) {
-                    (true, true) | (false, false) => {
-                        // Valid combination - controller matches presence
-                        if let Some(ref #field_ident) = self.#field_ident {
-                            #write_code
-                        }
-                    }
-                    (true, false) => {
-                        return Err(::abstract_bits::ToBytesError::ValidationError(
-                            format!("Field '{}' controller is true but option is None", stringify!(#field_ident))
-                        ));
-                    }
-                    (false, true) => {
-                        return Err(::abstract_bits::ToBytesError::ValidationError(
-                            format!("Field '{}' controller is false but option is Some", stringify!(#field_ident))
-                        ));
-                    }
+                if self.#controller_ident != self.#field_ident.is_some() {
+                    return Err(::abstract_bits::ToBytesError::ValidationError(
+                        format!("Field '{}' controller and option are mismatched", stringify!(#field_ident))
+                    ));
+                }
+
+                if let Some(ref #field_ident) = self.#field_ident {
+                    #write_code
                 }
             )
         }
