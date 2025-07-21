@@ -1,6 +1,6 @@
 use proc_macro2::{Literal, TokenStream};
 use quote::quote_spanned;
-use syn::Ident;
+use syn::Expr;
 use syn::spanned::Spanned;
 
 use crate::codegen::generics_to_fully_qualified;
@@ -35,7 +35,7 @@ pub fn read_field_code(
 
 pub fn read(
     field: &NormalField,
-    controller: &Ident,
+    controller: &Expr,
     struct_name: &Literal,
 ) -> TokenStream {
     let field_ident = &field.ident;

@@ -1,6 +1,6 @@
 use proc_macro2::{Literal, TokenStream};
 use quote::quote_spanned;
-use syn::Ident;
+use syn::Expr;
 
 use crate::model::NormalField;
 
@@ -16,7 +16,7 @@ pub(crate) fn write(inner_type: &NormalField) -> TokenStream {
 
 pub(crate) fn read(
     field: &NormalField,
-    controller: &Ident,
+    controller: &Expr,
     struct_name: &Literal,
 ) -> TokenStream {
     let field_name = Literal::string(&field.ident.to_string());

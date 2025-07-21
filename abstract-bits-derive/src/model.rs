@@ -77,13 +77,13 @@ pub enum Field {
     Option {
         full_type: NormalField,
         inner_type: NormalField,
-        controller: Ident,
+        controller: syn::Expr,
     },
     List {
         full_type: NormalField,
         inner_type: NormalField,
         max_len: usize,
-        controller: Ident,
+        controller: syn::Expr,
     },
     Array {
         length: syn::Expr,
@@ -197,9 +197,37 @@ impl Field {
 }
 
 fn max_size_from_controller_field(
-    controller_ident: &syn::Ident,
+    controller_expr: &syn::Expr,
     previous_fields: &[Field],
 ) -> usize {
+    // Extract the base field name from the expression
+    let controller_ident = match controller_expr {
+        syn::Expr::Path(path) if path.path.segments.len() == 1 => {
+            &path.path.segments[0].ident
+        }
+        syn::Expr::Field(field_expr) => {
+            if let syn::Expr::Path(base_path) = &*field_expr.base {
+                if base_path.path.segments.len() != 1 {
+                    abort!(
+                        controller_expr.span(),
+                        "Complex controller expressions not yet supported"
+                    );
+                }
+
+                &base_path.path.segments[0].ident
+            } else {
+                abort!(
+                    controller_expr.span(),
+                    "Complex controller expressions not yet supported"
+                );
+            }
+        }
+        _ => abort!(
+            controller_expr.span(),
+            "Controller expression must be a field name or field access"
+        ),
+    };
+    
     // Look for the controller field in previous_fields
     if let Some(ident) = previous_fields.iter().find_map(|f| match f {
         Field::Normal(nf) if nf.ident == *controller_ident => Some(nf),
@@ -258,8 +286,8 @@ fn strip_generic(field: syn::Field, outer_ident: &str) -> Option<syn::Field> {
     Some(new_field)
 }
 
-fn length_from_attr(field: &syn::Field) -> Option<Ident> {
-    fn parse(attr: &Attribute) -> Option<Result<Ident, ()>> {
+fn length_from_attr(field: &syn::Field) -> Option<syn::Expr> {
+    fn parse(attr: &Attribute) -> Option<Result<syn::Expr, ()>> {
         let Ok(list) = attr.meta.require_list() else {
             return Some(Err(()));
         };
@@ -272,10 +300,9 @@ fn length_from_attr(field: &syn::Field) -> Option<Ident> {
             Some(TokenTree::Punct(punct)) if punct.as_char() == '=' => (),
             _ => return Some(Err(())),
         }
-        let Some(TokenTree::Ident(controller_field)) = tokens.next() else {
-            return Some(Err(()));
-        };
-        Some(Ok(controller_field))
+        
+        // Parse remaining tokens as expression
+        Some(syn::parse2::<syn::Expr>(tokens.collect()).map_err(|_| ()))
     }
 
     let attr = field
@@ -284,15 +311,15 @@ fn length_from_attr(field: &syn::Field) -> Option<Ident> {
         .find(|a| a.path().is_ident("abstract_bits"))?;
 
     match parse(attr)? {
-        Ok(ident) => Some(ident),
+        Ok(expr) => Some(expr),
         Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
-            help = "The syntax is: #[abstract_bits(length_from = <ident>)] with ident \
-            a previous field controlling this vec's length"),
+            help = "The syntax is: #[abstract_bits(length_from = <expr>)] with expr \
+            an expression controlling this vec's length"),
     }
 }
 
-fn presence_from_attr(field: &syn::Field) -> Option<Ident> {
-    fn parse(attr: &Attribute) -> Option<Result<Ident, ()>> {
+fn presence_from_attr(field: &syn::Field) -> Option<syn::Expr> {
+    fn parse(attr: &Attribute) -> Option<Result<syn::Expr, ()>> {
         let Ok(list) = attr.meta.require_list() else {
             return Some(Err(()));
         };
@@ -305,10 +332,9 @@ fn presence_from_attr(field: &syn::Field) -> Option<Ident> {
             Some(TokenTree::Punct(punct)) if punct.as_char() == '=' => (),
             _ => return Some(Err(())),
         }
-        let Some(TokenTree::Ident(controller_field)) = tokens.next() else {
-            return Some(Err(()));
-        };
-        Some(Ok(controller_field))
+        
+        // Parse remaining tokens as expression
+        Some(syn::parse2::<syn::Expr>(tokens.collect()).map_err(|_| ()))
     }
 
     let attr = field
@@ -317,10 +343,10 @@ fn presence_from_attr(field: &syn::Field) -> Option<Ident> {
         .find(|a| a.path().is_ident("abstract_bits"))?;
 
     match parse(attr)? {
-        Ok(ident) => Some(ident),
+        Ok(expr) => Some(expr),
         Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
-            help = "The syntax is: #[abstract_bits(presence_from = <ident>)] with ident \
-            a previous field controlling this option's presence"),
+            help = "The syntax is: #[abstract_bits(presence_from = <expr>)] with expr \
+            a field expression controlling this option's presence"),
     }
 }
 
