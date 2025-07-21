@@ -196,10 +196,8 @@ fn max_size_from_controller_field(
         _ => None,
     }) {
         if let Some(bits) = ident.bits {
-            // Custom bit type (e.g., u3, u5)
             2usize.pow(bits as u32)
         } else {
-            // Standard type - extract bits from the type name
             if let Ok(bits) = padding_from_type(&ident.out_ty) {
                 2usize.pow(bits as u32)
             } else {
@@ -392,7 +390,6 @@ impl Model {
                 let field = Field::from(item, &fields);
                 fields.push(field);
             }
-            check_controlled_fields(&fields);
             Type::NormalStruct(fields)
         };
 
@@ -468,10 +465,4 @@ fn require_usize(expr: syn::Expr) -> usize {
     } else {
         unreachable!("only digits form a valid enum discriminant expression")
     }
-}
-
-fn check_controlled_fields(fields: &[Field]) {
-    // With the new API, controller fields are required and validated at field creation time
-    // No additional validation needed here
-    let _ = fields; // Suppress unused variable warning
 }

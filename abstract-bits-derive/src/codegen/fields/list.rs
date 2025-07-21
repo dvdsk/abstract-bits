@@ -7,7 +7,6 @@ use crate::model::NormalField;
 pub(crate) fn write(inner_type: &NormalField, controller: &Ident) -> TokenStream {
     let field_ident = &inner_type.ident;
 
-    // Validate that controller field matches the vector length
     quote_spanned! {field_ident.span()=>
         if self.#controller as usize != self.#field_ident.len() {
             return Err(::abstract_bits::ToBytesError::ValidationError(
@@ -18,7 +17,6 @@ pub(crate) fn write(inner_type: &NormalField, controller: &Ident) -> TokenStream
             ));
         }
 
-        // Write all elements
         for element in &self.#field_ident {
             ::abstract_bits::AbstractBits::write_abstract_bits(element, writer)?;
         }
@@ -34,7 +32,6 @@ pub(crate) fn read(
     let field_ident = &field.ident;
 
     quote_spanned! {field.ident.span()=>
-        // Use the controller field that was already read
         let res = (0..#controller).into_iter().map(|_|
             ::abstract_bits::AbstractBits::read_abstract_bits(reader)
         )
