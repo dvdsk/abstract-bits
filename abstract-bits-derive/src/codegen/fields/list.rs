@@ -8,15 +8,6 @@ pub(crate) fn write(inner_type: &NormalField, controller: &Ident) -> TokenStream
     let field_ident = &inner_type.ident;
 
     quote_spanned! {field_ident.span()=>
-        if self.#controller as usize != self.#field_ident.len() {
-            return Err(::abstract_bits::ToBytesError::ValidationError(
-                format!("Field '{}' length controller is {} but vector has {} elements",
-                    stringify!(#field_ident),
-                    self.#controller,
-                    self.#field_ident.len())
-            ));
-        }
-
         for element in &self.#field_ident {
             ::abstract_bits::AbstractBits::write_abstract_bits(element, writer)?;
         }

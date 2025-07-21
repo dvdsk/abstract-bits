@@ -66,14 +66,7 @@ pub fn write(field: &NormalField, controller: &Ident) -> TokenStream {
         }
     };
 
-    // Validate that controller field matches the presence of the option
     quote_spanned!(field_ident.span()=>
-        if self.#controller != self.#field_ident.is_some() {
-            return Err(::abstract_bits::ToBytesError::ValidationError(
-                format!("Field '{}' controller and option are mismatched", stringify!(#field_ident))
-            ));
-        }
-
         if let Some(ref #field_ident) = self.#field_ident {
             #write_code
         }
