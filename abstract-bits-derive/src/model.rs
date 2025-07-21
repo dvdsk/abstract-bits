@@ -77,13 +77,13 @@ pub enum Field {
     Option {
         full_type: NormalField,
         inner_type: NormalField,
-        controller: Option<Ident>, // For presence_from attribute
+        controller: Ident, // For presence_from attribute
     },
     List {
         full_type: NormalField,
         inner_type: NormalField,
         max_len: usize,
-        controller: Option<Ident>, // For length_from attribute
+        controller: Ident, // For length_from attribute
     },
     Array {
         length: syn::Expr,
@@ -157,23 +157,17 @@ impl Field {
                 .unwrap_or_else(|(msg, span)| abort!(span, msg));
             Self::PaddBits(padding)
         } else if let Some(option_stripped) = strip_option(field.clone()) {
-            let controller = presence_from_attr(&field);
+            let controller = presence_from_attr(&field)
+                .unwrap_or_else(|| abort!(ident.span(), "Option field '{}' requires presence_from attribute", ident));
             Self::Option {
                 inner_type: NormalField::from(option_stripped),
                 full_type: NormalField::from(field),
                 controller,
             }
         } else if let Some(vec_stripped) = strip_vec(field.clone()) {
-            let controller = length_from_attr(&field);
-            let max_len = if let Some(controller_ident) = &controller {
-                max_size_from_controller_field(controller_ident, previous_fields)
-            } else {
-                abort!(
-                    ident.span(),
-                    "List field '{}' requires length_from attribute",
-                    ident
-                )
-            };
+            let controller = length_from_attr(&field)
+                .unwrap_or_else(|| abort!(ident.span(), "List field '{}' requires length_from attribute", ident));
+            let max_len = max_size_from_controller_field(&controller, previous_fields);
             Self::List {
                 inner_type: NormalField::from(vec_stripped),
                 max_len,
@@ -477,27 +471,7 @@ fn require_usize(expr: syn::Expr) -> usize {
 }
 
 fn check_controlled_fields(fields: &[Field]) {
-    // With the new API, controller fields are computed automatically, so we just need to validate
-    // that Option and Vec fields have the appropriate attributes
-    for field in fields {
-        match field {
-            Field::Option {
-                controller: None,
-                full_type,
-                ..
-            } => {
-                abort!(full_type.ident.span(), "Option field '{}' requires presence_from attribute", full_type.ident;
-                    help = "Add #[abstract_bits(presence_from = <controller_field>)] to this field");
-            }
-            Field::List {
-                controller: None,
-                full_type,
-                ..
-            } => {
-                abort!(full_type.ident.span(), "List field '{}' requires length_from attribute", full_type.ident;
-                    help = "Add #[abstract_bits(length_from = <controller_field>)] to this field");
-            }
-            _ => {}
-        }
-    }
+    // With the new API, controller fields are required and validated at field creation time
+    // No additional validation needed here
+    let _ = fields; // Suppress unused variable warning
 }

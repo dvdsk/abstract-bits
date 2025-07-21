@@ -35,30 +35,23 @@ pub fn read_field_code(
 
 pub fn read(
     field: &NormalField,
-    controller: &Option<Ident>,
+    controller: &Ident,
     struct_name: &Literal,
 ) -> TokenStream {
     let field_ident = &field.ident;
     let field_read_code = read_field_code(field, struct_name);
 
-    match controller {
-        Some(controller_ident) => {
-            quote_spanned! {field.ident.span()=>
-                let #field_ident = if #controller_ident {
-                    #field_read_code
-                    Some(#field_ident)
-                } else {
-                    None
-                };
-            }
-        }
-        None => {
-            panic!("Option field without controller")
-        }
+    quote_spanned! {field.ident.span()=>
+        let #field_ident = if #controller {
+            #field_read_code
+            Some(#field_ident)
+        } else {
+            None
+        };
     }
 }
 
-pub fn write(field: &NormalField, controller: &Option<Ident>) -> TokenStream {
+pub fn write(field: &NormalField, controller: &Ident) -> TokenStream {
     let field_ident = &field.ident;
     let write_code = if let Some(bits) = field.bits {
         let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))
@@ -73,25 +66,18 @@ pub fn write(field: &NormalField, controller: &Option<Ident>) -> TokenStream {
         }
     };
 
-    match controller {
-        Some(controller_ident) => {
-            // Validate that controller field matches the presence of the option
-            quote_spanned!(field_ident.span()=>
-                if self.#controller_ident != self.#field_ident.is_some() {
-                    return Err(::abstract_bits::ToBytesError::ValidationError(
-                        format!("Field '{}' controller and option are mismatched", stringify!(#field_ident))
-                    ));
-                }
+    // Validate that controller field matches the presence of the option
+    quote_spanned!(field_ident.span()=>
+        if self.#controller != self.#field_ident.is_some() {
+            return Err(::abstract_bits::ToBytesError::ValidationError(
+                format!("Field '{}' controller and option are mismatched", stringify!(#field_ident))
+            ));
+        }
 
-                if let Some(ref #field_ident) = self.#field_ident {
-                    #write_code
-                }
-            )
+        if let Some(ref #field_ident) = self.#field_ident {
+            #write_code
         }
-        None => {
-            panic!("Option field without controller")
-        }
-    }
+    )
 }
 
 pub(crate) fn min_bits(inner_type: &NormalField) -> TokenStream {
