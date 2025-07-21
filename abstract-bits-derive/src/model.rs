@@ -77,13 +77,13 @@ pub enum Field {
     Option {
         full_type: NormalField,
         inner_type: NormalField,
-        controller: Ident, // For presence_from attribute
+        controller: Ident,
     },
     List {
         full_type: NormalField,
         inner_type: NormalField,
         max_len: usize,
-        controller: Ident, // For length_from attribute
+        controller: Ident,
     },
     Array {
         length: syn::Expr,
@@ -157,16 +157,26 @@ impl Field {
                 .unwrap_or_else(|(msg, span)| abort!(span, msg));
             Self::PaddBits(padding)
         } else if let Some(option_stripped) = strip_option(field.clone()) {
-            let controller = presence_from_attr(&field)
-                .unwrap_or_else(|| abort!(ident.span(), "Option field '{}' requires presence_from attribute", ident));
+            let controller = presence_from_attr(&field).unwrap_or_else(|| {
+                abort!(
+                    ident.span(),
+                    "Option field '{}' requires presence_from attribute",
+                    ident
+                )
+            });
             Self::Option {
                 inner_type: NormalField::from(option_stripped),
                 full_type: NormalField::from(field),
                 controller,
             }
         } else if let Some(vec_stripped) = strip_vec(field.clone()) {
-            let controller = length_from_attr(&field)
-                .unwrap_or_else(|| abort!(ident.span(), "List field '{}' requires length_from attribute", ident));
+            let controller = length_from_attr(&field).unwrap_or_else(|| {
+                abort!(
+                    ident.span(),
+                    "List field '{}' requires length_from attribute",
+                    ident
+                )
+            });
             let max_len = max_size_from_controller_field(&controller, previous_fields);
             Self::List {
                 inner_type: NormalField::from(vec_stripped),
@@ -277,7 +287,7 @@ fn length_from_attr(field: &syn::Field) -> Option<Ident> {
         Ok(ident) => Some(ident),
         Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
             help = "The syntax is: #[abstract_bits(length_from = <ident>)] with ident \
-            a previous field controlling this list's length"),
+            a previous field controlling this vec's length"),
     }
 }
 

@@ -36,16 +36,8 @@ impl Field {
         match self {
             Field::Normal(normal_field) => normal::write(normal_field),
             Field::PaddBits(n_bits) => padding::write(*n_bits, &struct_name),
-            Field::Option {
-                inner_type,
-                controller,
-                ..
-            } => option::write(inner_type, controller),
-            Field::List {
-                inner_type,
-                controller,
-                ..
-            } => list::write(inner_type, controller),
+            Field::Option { inner_type, .. } => option::write(inner_type),
+            Field::List { inner_type, .. } => list::write(inner_type),
             Field::Array { field, .. } => array::write(field),
         }
     }

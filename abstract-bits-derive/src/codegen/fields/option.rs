@@ -51,7 +51,7 @@ pub fn read(
     }
 }
 
-pub fn write(field: &NormalField, controller: &Ident) -> TokenStream {
+pub fn write(field: &NormalField) -> TokenStream {
     let field_ident = &field.ident;
     let write_code = if let Some(bits) = field.bits {
         let utype: syn::Type = syn::parse_str(&format!("::abstract_bits::u{bits}"))

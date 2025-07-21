@@ -4,7 +4,7 @@ use syn::Ident;
 
 use crate::model::NormalField;
 
-pub(crate) fn write(inner_type: &NormalField, controller: &Ident) -> TokenStream {
+pub(crate) fn write(inner_type: &NormalField) -> TokenStream {
     let field_ident = &inner_type.ident;
 
     quote_spanned! {field_ident.span()=>
