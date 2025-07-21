@@ -77,35 +77,23 @@ pub enum Field {
     Option {
         full_type: NormalField,
         inner_type: NormalField,
+        controller: syn::Expr,
     },
     List {
         full_type: NormalField,
         inner_type: NormalField,
         max_len: usize,
+        controller: syn::Expr,
     },
     Array {
         length: syn::Expr,
         inner_type: syn::Type,
         field: syn::Field,
     },
-    ControlList {
-        controlled: Ident,
-        bits: usize,
-    },
-    ControlOption(Ident),
     PaddBits(u8),
 }
 
 impl Field {
-    pub fn option_stripped(&self) -> Option<&NormalField> {
-        match self {
-            Field::Option {
-                inner_type: field, ..
-            } => Some(field),
-            _ => None,
-        }
-    }
-
     pub fn needed_in_struct_def(&self) -> Option<NormalField> {
         match self {
             Field::Normal(field)
@@ -114,10 +102,23 @@ impl Field {
             }
             | Field::List {
                 full_type: field, ..
-            } => Some(field.clone()),
+            } => {
+                let mut filtered_field = field.clone();
+                filtered_field.attrs = filtered_field
+                    .attrs
+                    .into_iter()
+                    .filter(|attr| !attr.path().is_ident("abstract_bits"))
+                    .collect();
+                Some(filtered_field)
+            }
             Field::Array { field, .. } => Some(NormalField {
                 vis: field.vis.clone(),
-                attrs: field.attrs.clone(),
+                attrs: field
+                    .attrs
+                    .clone()
+                    .into_iter()
+                    .filter(|attr| !attr.path().is_ident("abstract_bits"))
+                    .collect(),
                 ident: field
                     .ident
                     .clone()
@@ -151,29 +152,37 @@ impl Field {
             .ident
             .as_ref()
             .expect("unit structs are not tranformed into model::Field");
-        if let Some(controlled) = controls_option(&field) {
-            Self::ControlOption(controlled)
-        } else if let Some(controlled) = controls_list(&field) {
-            let bits = padding_from_type(&field.ty)
-                .unwrap_or_else(|(msg, span)| abort!(span, msg));
-            Self::ControlList {
-                controlled,
-                bits: bits as usize,
-            }
-        } else if ident == "reserved" {
+        if ident == "reserved" {
             let padding = padding_from_type(&field.ty)
                 .unwrap_or_else(|(msg, span)| abort!(span, msg));
             Self::PaddBits(padding)
         } else if let Some(option_stripped) = strip_option(field.clone()) {
+            let controller = presence_from_attr(&field).unwrap_or_else(|| {
+                abort!(
+                    ident.span(),
+                    "Option field '{}' requires presence_from attribute",
+                    ident
+                )
+            });
             Self::Option {
                 inner_type: NormalField::from(option_stripped),
                 full_type: NormalField::from(field),
+                controller,
             }
         } else if let Some(vec_stripped) = strip_vec(field.clone()) {
+            let controller = length_from_attr(&field).unwrap_or_else(|| {
+                abort!(
+                    ident.span(),
+                    "List field '{}' requires length_from attribute",
+                    ident
+                )
+            });
+            let max_len = max_size_from_controller_field(&controller, previous_fields);
             Self::List {
                 inner_type: NormalField::from(vec_stripped),
-                max_len: max_size_from_control_list(&ident, previous_fields),
+                max_len,
                 full_type: NormalField::from(field),
+                controller,
             }
         } else if let syn::Type::Array(a) = &field.ty {
             Self::Array {
@@ -187,18 +196,61 @@ impl Field {
     }
 }
 
-fn max_size_from_control_list(ident: &syn::Ident, previous_fields: &[Field]) -> usize {
-    if let Some(bits) = previous_fields.iter().find_map(|f| match f {
-        Field::ControlList {
-            controlled, bits, ..
-        } if controlled == ident => Some(bits),
+fn max_size_from_controller_field(
+    controller_expr: &syn::Expr,
+    previous_fields: &[Field],
+) -> usize {
+    // Extract the base field name from the expression
+    let controller_ident = match controller_expr {
+        syn::Expr::Path(path) if path.path.segments.len() == 1 => {
+            &path.path.segments[0].ident
+        }
+        syn::Expr::Field(field_expr) => {
+            if let syn::Expr::Path(base_path) = &*field_expr.base {
+                if base_path.path.segments.len() != 1 {
+                    abort!(
+                        controller_expr.span(),
+                        "Complex controller expressions not yet supported"
+                    );
+                }
+
+                &base_path.path.segments[0].ident
+            } else {
+                abort!(
+                    controller_expr.span(),
+                    "Complex controller expressions not yet supported"
+                );
+            }
+        }
+        _ => abort!(
+            controller_expr.span(),
+            "Controller expression must be a field name or field access"
+        ),
+    };
+    
+    // Look for the controller field in previous_fields
+    if let Some(ident) = previous_fields.iter().find_map(|f| match f {
+        Field::Normal(nf) if nf.ident == *controller_ident => Some(nf),
         _ => None,
     }) {
-        2usize.pow(*bits as u32)
+        if let Some(bits) = ident.bits {
+            2usize.pow(bits as u32)
+        } else {
+            if let Ok(bits) = padding_from_type(&ident.out_ty) {
+                2usize.pow(bits as u32)
+            } else {
+                abort!(
+                    controller_ident.span(),
+                    "Controller field '{}' must be a numeric type with known bit size",
+                    controller_ident
+                );
+            }
+        }
     } else {
         abort!(
-            ident,
-            "List without field controlling its length is not allowed"
+            controller_ident.span(),
+            "Controller field '{}' not found",
+            controller_ident
         );
     }
 }
@@ -234,24 +286,23 @@ fn strip_generic(field: syn::Field, outer_ident: &str) -> Option<syn::Field> {
     Some(new_field)
 }
 
-fn controls_option(field: &syn::Field) -> Option<Ident> {
-    fn parse(attr: &Attribute) -> Option<Result<Ident, ()>> {
+fn length_from_attr(field: &syn::Field) -> Option<syn::Expr> {
+    fn parse(attr: &Attribute) -> Option<Result<syn::Expr, ()>> {
         let Ok(list) = attr.meta.require_list() else {
             return Some(Err(()));
         };
         let mut tokens = list.tokens.clone().into_iter();
         match tokens.next() {
-            Some(TokenTree::Ident(ident)) if ident == "presence_of" => (),
+            Some(TokenTree::Ident(ident)) if ident == "length_from" => (),
             _ => return None,
         }
         match tokens.next() {
             Some(TokenTree::Punct(punct)) if punct.as_char() == '=' => (),
             _ => return Some(Err(())),
         }
-        let Some(TokenTree::Ident(target_field)) = tokens.next() else {
-            return Some(Err(()));
-        };
-        Some(Ok(target_field))
+        
+        // Parse remaining tokens as expression
+        Some(syn::parse2::<syn::Expr>(tokens.collect()).map_err(|_| ()))
     }
 
     let attr = field
@@ -260,31 +311,30 @@ fn controls_option(field: &syn::Field) -> Option<Ident> {
         .find(|a| a.path().is_ident("abstract_bits"))?;
 
     match parse(attr)? {
-        Ok(ident) => Some(ident),
+        Ok(expr) => Some(expr),
         Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
-            help = "The syntax is: #[abstract_bits(presence_of = <ident>)] with ident \
-            a later option type field"),
+            help = "The syntax is: #[abstract_bits(length_from = <expr>)] with expr \
+            an expression controlling this vec's length"),
     }
 }
 
-fn controls_list(field: &syn::Field) -> Option<Ident> {
-    fn parse(attr: &Attribute) -> Result<Ident, ()> {
+fn presence_from_attr(field: &syn::Field) -> Option<syn::Expr> {
+    fn parse(attr: &Attribute) -> Option<Result<syn::Expr, ()>> {
         let Ok(list) = attr.meta.require_list() else {
-            return Err(());
+            return Some(Err(()));
         };
         let mut tokens = list.tokens.clone().into_iter();
         match tokens.next() {
-            Some(TokenTree::Ident(ident)) if ident == "length_of" => (),
-            _ => return Err(()),
+            Some(TokenTree::Ident(ident)) if ident == "presence_from" => (),
+            _ => return None,
         }
         match tokens.next() {
             Some(TokenTree::Punct(punct)) if punct.as_char() == '=' => (),
-            _ => return Err(()),
+            _ => return Some(Err(())),
         }
-        let Some(TokenTree::Ident(target_field)) = tokens.next() else {
-            return Err(());
-        };
-        Ok(target_field)
+        
+        // Parse remaining tokens as expression
+        Some(syn::parse2::<syn::Expr>(tokens.collect()).map_err(|_| ()))
     }
 
     let attr = field
@@ -292,11 +342,11 @@ fn controls_list(field: &syn::Field) -> Option<Ident> {
         .iter()
         .find(|a| a.path().is_ident("abstract_bits"))?;
 
-    match parse(attr) {
-        Ok(ident) => Some(ident),
+    match parse(attr)? {
+        Ok(expr) => Some(expr),
         Err(_) => abort!(attr.span(), "invalid abstract_bits attribute"; 
-            help = "The syntax is: #[abstract_bits(length_of = <ident>)] with ident \
-            a later option type field"),
+            help = "The syntax is: #[abstract_bits(presence_from = <expr>)] with expr \
+            a field expression controlling this option's presence"),
     }
 }
 
@@ -376,7 +426,6 @@ impl Model {
                 let field = Field::from(item, &fields);
                 fields.push(field);
             }
-            check_controlled_fields(&fields);
             Type::NormalStruct(fields)
         };
 
@@ -451,21 +500,5 @@ fn require_usize(expr: syn::Expr) -> usize {
             .expect("only valid numbers can be enum discriminant")
     } else {
         unreachable!("only digits form a valid enum discriminant expression")
-    }
-}
-
-fn check_controlled_fields(fields: &[Field]) {
-    for field in fields {
-        if let Field::ControlOption(controlled) = field {
-            if !fields
-                .iter()
-                .filter_map(Field::option_stripped)
-                .any(|f| f.ident == *controlled)
-            {
-                abort!(controlled.span(), "No field {} to be controlled by this annotated \
-                    field", controlled; note = "The field being controlled must follow \
-                    the boolean (bitfield) controlling it.")
-            }
-        }
     }
 }
