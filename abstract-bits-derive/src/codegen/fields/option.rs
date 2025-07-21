@@ -6,7 +6,6 @@ use syn::spanned::Spanned;
 use crate::codegen::generics_to_fully_qualified;
 use crate::model::NormalField;
 
-
 pub fn read_field_code(
     NormalField {
         ident,
@@ -34,7 +33,11 @@ pub fn read_field_code(
     }
 }
 
-pub fn read(field: &NormalField, controller: &Option<Ident>, struct_name: &Literal) -> TokenStream {
+pub fn read(
+    field: &NormalField,
+    controller: &Option<Ident>,
+    struct_name: &Literal,
+) -> TokenStream {
     let field_ident = &field.ident;
     let field_read_code = read_field_code(field, struct_name);
 

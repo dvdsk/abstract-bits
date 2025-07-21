@@ -93,13 +93,6 @@ pub enum Field {
     PaddBits(u8),
 }
 
-fn filter_abstract_bits_attrs(attrs: Vec<Attribute>) -> Vec<Attribute> {
-    attrs.into_iter()
-        .filter(|attr| !attr.path().is_ident("abstract_bits"))
-        .collect()
-}
-
-
 impl Field {
     pub fn needed_in_struct_def(&self) -> Option<NormalField> {
         match self {
@@ -111,12 +104,21 @@ impl Field {
                 full_type: field, ..
             } => {
                 let mut filtered_field = field.clone();
-                filtered_field.attrs = filter_abstract_bits_attrs(filtered_field.attrs);
+                filtered_field.attrs = filtered_field
+                    .attrs
+                    .into_iter()
+                    .filter(|attr| !attr.path().is_ident("abstract_bits"))
+                    .collect();
                 Some(filtered_field)
-            },
+            }
             Field::Array { field, .. } => Some(NormalField {
                 vis: field.vis.clone(),
-                attrs: filter_abstract_bits_attrs(field.attrs.clone()),
+                attrs: field
+                    .attrs
+                    .clone()
+                    .into_iter()
+                    .filter(|attr| !attr.path().is_ident("abstract_bits"))
+                    .collect(),
                 ident: field
                     .ident
                     .clone()
@@ -166,7 +168,11 @@ impl Field {
             let max_len = if let Some(controller_ident) = &controller {
                 max_size_from_controller_field(controller_ident, previous_fields)
             } else {
-                abort!(ident.span(), "List field '{}' requires length_from attribute", ident)
+                abort!(
+                    ident.span(),
+                    "List field '{}' requires length_from attribute",
+                    ident
+                )
             };
             Self::List {
                 inner_type: NormalField::from(vec_stripped),
@@ -186,8 +192,10 @@ impl Field {
     }
 }
 
-
-fn max_size_from_controller_field(controller_ident: &syn::Ident, previous_fields: &[Field]) -> usize {
+fn max_size_from_controller_field(
+    controller_ident: &syn::Ident,
+    previous_fields: &[Field],
+) -> usize {
     // Look for the controller field in previous_fields
     if let Some(ident) = previous_fields.iter().find_map(|f| match f {
         Field::Normal(nf) if nf.ident == *controller_ident => Some(nf),
@@ -203,18 +211,19 @@ fn max_size_from_controller_field(controller_ident: &syn::Ident, previous_fields
             } else {
                 abort!(
                     controller_ident.span(),
-                    "Controller field '{}' must be a numeric type with known bit size", controller_ident
+                    "Controller field '{}' must be a numeric type with known bit size",
+                    controller_ident
                 );
             }
         }
     } else {
         abort!(
             controller_ident.span(),
-            "Controller field '{}' not found", controller_ident
+            "Controller field '{}' not found",
+            controller_ident
         );
     }
 }
-
 
 fn strip_vec(field: syn::Field) -> Option<syn::Field> {
     strip_generic(field, "Vec")
@@ -246,7 +255,6 @@ fn strip_generic(field: syn::Field, outer_ident: &str) -> Option<syn::Field> {
     new_field.ty = inner_type.clone();
     Some(new_field)
 }
-
 
 fn length_from_attr(field: &syn::Field) -> Option<Ident> {
     fn parse(attr: &Attribute) -> Option<Result<Ident, ()>> {
@@ -473,11 +481,19 @@ fn check_controlled_fields(fields: &[Field]) {
     // that Option and Vec fields have the appropriate attributes
     for field in fields {
         match field {
-            Field::Option { controller: None, full_type, .. } => {
+            Field::Option {
+                controller: None,
+                full_type,
+                ..
+            } => {
                 abort!(full_type.ident.span(), "Option field '{}' requires presence_from attribute", full_type.ident;
                     help = "Add #[abstract_bits(presence_from = <controller_field>)] to this field");
             }
-            Field::List { controller: None, full_type, .. } => {
+            Field::List {
+                controller: None,
+                full_type,
+                ..
+            } => {
                 abort!(full_type.ident.span(), "List field '{}' requires length_from attribute", full_type.ident;
                     help = "Add #[abstract_bits(length_from = <controller_field>)] to this field");
             }

@@ -7,7 +7,7 @@ use codegen::codegen;
 mod errors;
 
 /// # Warning
-/// - When applied to an enum (which does not contain values) 
+/// - When applied to an enum (which does not contain values)
 /// that enum must be Copy.
 /// - Any derives should be applied **after** the `abstract_bits` macro.
 ///

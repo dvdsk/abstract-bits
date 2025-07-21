@@ -176,7 +176,6 @@ impl ToTokens for super::model::EmptyVariant {
     }
 }
 
-
 pub fn is_primitive(bits: usize) -> Option<TokenStream> {
     match bits {
         8 => Some(quote! {u8}),

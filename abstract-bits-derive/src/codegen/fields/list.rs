@@ -19,7 +19,7 @@ pub(crate) fn write(inner_type: &NormalField, controller: &Option<Ident>) -> Tok
                             self.#field_ident.len())
                     ));
                 }
-                
+
                 // Write all elements
                 for element in &self.#field_ident {
                     ::abstract_bits::AbstractBits::write_abstract_bits(element, writer)?;
@@ -32,7 +32,11 @@ pub(crate) fn write(inner_type: &NormalField, controller: &Option<Ident>) -> Tok
     }
 }
 
-pub(crate) fn read(field: &NormalField, controller: &Option<Ident>, struct_name: &Literal) -> TokenStream {
+pub(crate) fn read(
+    field: &NormalField,
+    controller: &Option<Ident>,
+    struct_name: &Literal,
+) -> TokenStream {
     let field_name = Literal::string(&field.ident.to_string());
     let field_ident = &field.ident;
 

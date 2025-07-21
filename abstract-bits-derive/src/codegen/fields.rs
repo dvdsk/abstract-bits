@@ -13,8 +13,16 @@ impl Field {
         match self {
             Field::Normal(normal_field) => normal::read(normal_field, &struct_name),
             Field::PaddBits(n_bits) => padding::read(*n_bits, &struct_name),
-            Field::Option { inner_type, controller, .. } => option::read(inner_type, controller, &struct_name),
-            Field::List { inner_type, controller, .. } => list::read(inner_type, controller, &struct_name),
+            Field::Option {
+                inner_type,
+                controller,
+                ..
+            } => option::read(inner_type, controller, &struct_name),
+            Field::List {
+                inner_type,
+                controller,
+                ..
+            } => list::read(inner_type, controller, &struct_name),
             Field::Array {
                 length,
                 inner_type,
@@ -28,8 +36,16 @@ impl Field {
         match self {
             Field::Normal(normal_field) => normal::write(normal_field),
             Field::PaddBits(n_bits) => padding::write(*n_bits, &struct_name),
-            Field::Option { inner_type, controller, .. } => option::write(inner_type, controller),
-            Field::List { inner_type, controller, .. } => list::write(inner_type, controller),
+            Field::Option {
+                inner_type,
+                controller,
+                ..
+            } => option::write(inner_type, controller),
+            Field::List {
+                inner_type,
+                controller,
+                ..
+            } => list::write(inner_type, controller),
             Field::Array { field, .. } => array::write(field),
         }
     }
